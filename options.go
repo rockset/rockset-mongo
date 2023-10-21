@@ -50,7 +50,7 @@ func (inputOptions *InputOptions) GetQuery() ([]byte, error) {
 type OutputOptions struct {
 	Out        string `long:"out" value-name:"<directory-path>" short:"o" description:"output directory, or '-' for stdout (default: 'dump')"`
 	Gzip       bool   `long:"gzip" description:"compress collection output with Gzip"`
-	TargetSize uint32 `long:"target_size" description:"target file size in MiB"`
+	TargetSize uint32 `long:"target_size" default:"100" description:"target file size in MiB"`
 }
 
 // Name returns a human-readable group name for output options.
