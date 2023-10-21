@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -31,6 +32,11 @@ func main() {
 }
 
 func export(args []string) {
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+	finishedChan := signals.HandleWithInterrupt(cancelFn)
+	defer close(finishedChan)
+
 	opts, err := ParseOptions(args, VersionStr, GitCommit)
 	if err != nil {
 		log.Logvf(log.Always, "error parsing command line options: %s", err.Error())
@@ -64,15 +70,12 @@ func export(args []string) {
 		ProgressManager: progressManager,
 	}
 
-	finishedChan := signals.HandleWithInterrupt(dump.HandleInterrupt)
-	defer close(finishedChan)
-
 	if err = dump.Init(); err != nil {
 		log.Logvf(log.Always, "Failed: %v", err)
 		os.Exit(util.ExitFailure)
 	}
 
-	if err = dump.Dump(); err != nil {
+	if err = dump.Dump(ctx, os.Stdout); err != nil {
 		log.Logvf(log.Always, "Failed: %v", err)
 		os.Exit(util.ExitFailure)
 	}

@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"sync"
 
 	"github.com/mongodb/mongo-tools/common/db"
 	"github.com/mongodb/mongo-tools/common/log"
@@ -23,32 +21,13 @@ type MongoDump struct {
 
 	ProgressManager progress.Manager
 	SessionProvider *db.SessionProvider
-	query           bson.D
-	isMongos        bool
-	isAtlasProxy    bool
 
-	db          string
-	collection  string
+	isMongos     bool
+	isAtlasProxy bool
+
+	collection  *mongo.Collection
 	dbNamespace string
-
-	// shutdownIntentsNotifier is provided to the multiplexer
-	// as well as the signal handler, and allows them to notify
-	// the intent dumpers that they should shutdown
-	shutdownIntentsNotifier *notifier
-
-	// Writer to take care of BSON output when not writing to the local filesystem.
-	// This is initialized to os.Stdout if unset.
-	OutputWriter io.Writer
 }
-
-type notifier struct {
-	notified chan struct{}
-	once     sync.Once
-}
-
-func (n *notifier) Notify() { n.once.Do(func() { close(n.notified) }) }
-
-func newNotifier() *notifier { return &notifier{notified: make(chan struct{})} }
 
 // Init performs preliminary setup operations for MongoDump.
 func (dump *MongoDump) Init() error {
@@ -75,13 +54,13 @@ func (dump *MongoDump) Init() error {
 		log.Logv(log.DebugLow, "dumping from a MongoDB Atlas free or shared cluster")
 	}
 
-	if dump.OutputWriter == nil {
-		dump.OutputWriter = os.Stdout
+	session, err := dump.SessionProvider.GetSession()
+	if err != nil {
+		return err
 	}
 
-	dump.db = dump.ToolOptions.DB
-	dump.collection = dump.ToolOptions.Collection
-	dump.dbNamespace = dump.db + "." + dump.collection
+	dump.collection = session.Database(dump.ToolOptions.DB).Collection(dump.ToolOptions.Collection)
+	dump.dbNamespace = dump.ToolOptions.DB + "." + dump.ToolOptions.Collection
 
 	// warn if we are trying to dump from a secondary in a sharded cluster
 	if dump.isMongos && pref != readpref.Primary() {
@@ -91,72 +70,48 @@ func (dump *MongoDump) Init() error {
 	return nil
 }
 
-func (dump *MongoDump) HandleInterrupt() {
-	if dump.shutdownIntentsNotifier != nil {
-		dump.shutdownIntentsNotifier.Notify()
-	}
+func (dump *MongoDump) Close() {
+	dump.SessionProvider.Close()
 }
 
-func (dump *MongoDump) Dump() error {
-	defer dump.SessionProvider.Close()
-
+func (dump *MongoDump) Dump(ctx context.Context, writer io.Writer) error {
 	session, err := dump.SessionProvider.GetSession()
 	if err != nil {
 		return fmt.Errorf("error getting a client session: %v", err)
 	}
-	err = session.Ping(context.Background(), nil)
+	err = session.Ping(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("error connecting to host: %v", err)
 	}
 	log.Logvf(log.DebugLow, "exporting collection")
 
-	dump.shutdownIntentsNotifier = newNotifier()
-
-	return dump.dumpCollection()
+	return dump.dumpCollection(ctx, writer)
 }
 
-func (dump *MongoDump) dumpCollection() error {
-	session, err := dump.SessionProvider.GetSession()
+func (dump *MongoDump) dumpCollection(ctx context.Context, writer io.Writer) error {
+	query := &db.DeferredQuery{Coll: dump.collection}
+
+	isMMAPV1, err := db.IsMMAPV1(dump.collection.Database(), dump.collection.Name())
 	if err != nil {
-		return err
-	}
-	intendedDB := session.Database(dump.db)
-	coll := intendedDB.Collection(dump.collection)
-
-	findQuery := &db.DeferredQuery{Coll: coll}
-	if len(dump.query) > 0 {
-		findQuery.Filter = dump.query
+		log.Logvf(log.Always,
+			"failed to determine storage engine, an mmapv1 storage engine could result in"+
+				" inconsistent dump results, error was: %v", err)
+	} else if isMMAPV1 {
+		log.Logvf(log.Always, "running with MMAP, setting _id hint")
+		query.Hint = bson.D{{"_id", 1}}
 	}
 
-	var dumpCount int64
-
-	if true {
-		log.Logvf(log.Always, "writing %v.%v to stdout", dump.db, dump.collection)
-		dumpCount, err = dump.dumpValidatedQuery(findQuery, os.Stdout)
-		if err == nil {
-			// on success, print the document count
-			log.Logvf(log.Always, "dumped %v documents", dumpCount)
-		}
-		return err
+	dumpCount, err := dump.dumpValidatedQuery(ctx, query, writer)
+	if err == nil {
+		// on success, print the document count
+		log.Logvf(log.Always, "dumped %v documents", dumpCount)
 	}
-
-	log.Logvf(log.Always, "writing %v to %v", dump.collection, "TODO")
-	if dumpCount, err = dump.dumpValidatedQuery(findQuery, os.Stdout); err != nil {
-		return err
-	}
-
-	log.Logvf(log.Always, "done dumping %v (%v documents)", dump.db, dumpCount)
-	return nil
+	return err
 }
 
 // getCount counts the number of documents in the namespace for the given intent. It does not run the count for
 // the oplog collection to avoid the performance issue in TOOLS-2068.
 func (dump *MongoDump) getCount(query *db.DeferredQuery) (int64, error) {
-	if len(dump.query) != 0 {
-		log.Logvf(log.DebugLow, "not counting query")
-		return 0, nil
-	}
-
 	log.Logvf(log.DebugHigh, "Getting estimated count for %v.%v", query.Coll.Database().Name(), query.Coll.Name())
 	total, err := query.Count(false)
 	if err != nil {
@@ -172,56 +127,24 @@ func (dump *MongoDump) getCount(query *db.DeferredQuery) (int64, error) {
 // and writes the raw bson results to the writer. Returns a final count of documents
 // dumped, and any errors that occurred.
 func (dump *MongoDump) dumpValidatedQuery(
-	query *db.DeferredQuery, writer io.Writer) (dumpCount int64, err error) {
-
-	// restore of views from archives require an empty collection as the trigger to create the view
-	// so, we open here before the early return if IsView so that we write an empty collection to the archive
-	// err = intent.BSONFile.Open()
-	// if err != nil {
-	// 	return 0, err
-	// }
-	// defer func() {
-	// 	closeErr := intent.BSONFile.Close()
-	// 	if err == nil && closeErr != nil {
-	// 		err = fmt.Errorf("error writing data for collection `%v` to disk: %v", dump.dbNamespace, closeErr)
-	// 	}
-	// }()
+	ctx context.Context, query *db.DeferredQuery, writer io.Writer) (dumpCount int64, err error) {
 
 	total, err := dump.getCount(query)
 	if err != nil {
 		return 0, err
 	}
 
-	info, err := dump.getCollectionInfo(query)
-	if err != nil {
-		return 0, err
-	}
-	log.Logvf(log.Always, "resume token: %v", info)
-
 	dumpProgressor := progress.NewCounter(total)
 	if dump.ProgressManager != nil {
-		dump.ProgressManager.Attach("namespace", dumpProgressor)
-		defer dump.ProgressManager.Detach("namespace")
+		dump.ProgressManager.Attach(dump.dbNamespace, dumpProgressor)
+		defer dump.ProgressManager.Detach(dump.dbNamespace)
 	}
-
-	// var f io.Writer
-	// f = intent.BSONFile
-	// if buffer != nil {
-	// 	buffer.Reset(f)
-	// 	f = buffer
-	// 	defer func() {
-	// 		closeErr := buffer.Close()
-	// 		if err == nil && closeErr != nil {
-	// 			err = fmt.Errorf("error writing data for collection `%v` to disk: %v", dump.dbNamespace, closeErr)
-	// 		}
-	// 	}()
-	// }
 
 	cursor, err := query.Iter()
 	if err != nil {
 		return
 	}
-	err = dump.dumpValidatedIterToWriter(cursor, writer, dumpProgressor)
+	err = dump.dumpValidatedIterToWriter(ctx, cursor, writer, dumpProgressor)
 	dumpCount, _ = dumpProgressor.Progress()
 	if err != nil {
 		err = fmt.Errorf("error writing data for collection `%v` to disk: %v", dump.dbNamespace, err)
@@ -230,7 +153,7 @@ func (dump *MongoDump) dumpValidatedQuery(
 }
 
 func (dump *MongoDump) dumpValidatedIterToWriter(
-	iter *mongo.Cursor, writer io.Writer, progressCount progress.Updateable) error {
+	ctx context.Context, iter *mongo.Cursor, writer io.Writer, progressCount progress.Updateable) error {
 	defer iter.Close(context.Background())
 	var termErr error
 
@@ -242,7 +165,7 @@ func (dump *MongoDump) dumpValidatedIterToWriter(
 		ctx := context.Background()
 		for {
 			select {
-			case <-dump.shutdownIntentsNotifier.notified:
+			case <-ctx.Done():
 				log.Logvf(log.DebugHigh, "terminating writes")
 				termErr = util.ErrTerminated
 				close(buffChan)
@@ -282,8 +205,8 @@ func (dump *MongoDump) dumpValidatedIterToWriter(
 	return termErr
 }
 
-func (dump *MongoDump) getCollectionInfo(query *db.DeferredQuery) (*CollectionInfo, error) {
-	stream, err := query.Coll.Watch(context.TODO(), mongo.Pipeline{})
+func (dump *MongoDump) CollectionInfo(ctx context.Context) (*CollectionInfo, error) {
+	stream, err := dump.collection.Watch(ctx, mongo.Pipeline{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to read changelog stream: %w", err)
 	}
@@ -294,7 +217,7 @@ func (dump *MongoDump) getCollectionInfo(query *db.DeferredQuery) (*CollectionIn
 		log.Logvf(log.Always, "read %v", stream.Current.String())
 	}
 
-	r := query.Coll.Database().RunCommand(context.TODO(), bson.M{"collStats": query.Coll.Name()})
+	r := dump.collection.Database().RunCommand(ctx, bson.M{"collStats": dump.collection.Name()})
 	if r.Err() != nil {
 		panic(r.Err())
 	}
