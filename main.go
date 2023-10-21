@@ -75,7 +75,7 @@ func export(args []string) {
 		os.Exit(util.ExitFailure)
 	}
 
-	out, err := NewWriter(*opts.OutputOptions)
+	out, err := NewWriter(&opts)
 	if err != nil {
 		log.Logvf(log.Always, "Failed to create writer: %v", err)
 		os.Exit(util.ExitFailure)
