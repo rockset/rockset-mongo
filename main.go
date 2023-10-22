@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	progressBarLength   = 24
-	progressBarWaitTime = 3 * time.Second * 3
+	progressBarLength   = 50
+	progressBarWaitTime = 3 * time.Second
 )
 
 var (
