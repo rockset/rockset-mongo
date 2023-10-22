@@ -75,11 +75,12 @@ func export(args []string) {
 		os.Exit(util.ExitFailure)
 	}
 
-	out, err := NewWriter(&opts)
+	out, err := NewWriter(ctx, &opts)
 	if err != nil {
 		log.Logvf(log.Always, "Failed to create writer: %v", err)
 		os.Exit(util.ExitFailure)
 	}
+	defer out.Close()
 
 	log.Logvf(log.Always, "exporting")
 	if err = dump.Dump(ctx, out); err != nil {
