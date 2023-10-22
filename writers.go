@@ -14,6 +14,12 @@ func NewWriter(opts *Options) (io.WriteCloser, error) {
 	} else if strings.HasPrefix(opts.Out, "s3://") {
 		return nil, fmt.Errorf("s3 not implemented yet")
 	} else {
+		if _, err := os.Stat(opts.Out); err == nil {
+			return nil, fmt.Errorf("path %s exists already", opts.Out)
+		} else if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("unexpected error: %w", err)
+		}
+
 		if err := os.MkdirAll(opts.Out, 0700); err != nil {
 			return nil, fmt.Errorf("failed to create dir %s: %w", opts.Out, err)
 		}

@@ -154,7 +154,7 @@ func (dump *MongoDump) dumpValidatedQuery(
 
 func (dump *MongoDump) dumpValidatedIterToWriter(
 	ctx context.Context, iter *mongo.Cursor, writer io.Writer, progressCount progress.Updateable) error {
-	defer iter.Close(context.Background())
+	defer iter.Close(context.TODO())
 	var termErr error
 
 	// We run the result iteration in its own goroutine,
@@ -162,7 +162,6 @@ func (dump *MongoDump) dumpValidatedIterToWriter(
 	// which gives a slight speedup on benchmarks
 	buffChan := make(chan []byte)
 	go func() {
-		ctx := context.Background()
 		for {
 			select {
 			case <-ctx.Done():
@@ -213,7 +212,7 @@ func (dump *MongoDump) CollectionInfo(ctx context.Context) (*CollectionInfo, err
 
 	defer stream.Close(context.TODO())
 
-	if stream.TryNext(context.TODO()) {
+	if stream.TryNext(ctx) {
 		log.Logvf(log.Always, "read %v", stream.Current.String())
 	}
 

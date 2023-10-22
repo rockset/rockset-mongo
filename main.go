@@ -81,6 +81,7 @@ func export(args []string) {
 		os.Exit(util.ExitFailure)
 	}
 
+	log.Logvf(log.Always, "exporting")
 	if err = dump.Dump(ctx, out); err != nil {
 		log.Logvf(log.Always, "Failed: %v", err)
 		os.Exit(util.ExitFailure)
