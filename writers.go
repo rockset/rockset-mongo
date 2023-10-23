@@ -22,11 +22,8 @@ func NewWriter(ctx context.Context, opts *Options) (io.WriteCloser, error) {
 		return &nopCloserWriter{os.Stdout}, nil
 	} else if strings.HasPrefix(opts.Out, "s3://") {
 		return NewS3Writer(ctx, opts)
-		return nil, fmt.Errorf("s3 not implemented yet")
-	} else {
-		return NewDirectoryWriter(opts.Out, opts)
 	}
-	return nil, fmt.Errorf("unexpected format %s", opts.Out)
+	return NewDirectoryWriter(opts.Out, opts)
 }
 
 type nopCloserWriter struct {

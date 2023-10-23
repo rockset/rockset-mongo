@@ -69,19 +69,31 @@ func ReadState(path string) (*State, error) {
 
 func toUint64(value interface{}) uint64 {
 	switch v := value.(type) {
-	case int:
+	// all supported numerical types (except for complex)
+	case uint8:
+		return uint64(v)
+	case uint16:
+		return uint64(v)
+	case uint32:
+		return uint64(v)
+	case uint64:
+		return uint64(v)
+
+	case int8:
+		return uint64(v)
+	case int16:
 		return uint64(v)
 	case int32:
 		return uint64(v)
 	case int64:
 		return uint64(v)
-	case uint:
+
+	case float32:
 		return uint64(v)
-	case uint32:
+	case float64:
 		return uint64(v)
-	case uint64:
-		return v
+
 	default:
-		panic(fmt.Errorf("Unsupported type: %T", value))
+		panic(fmt.Errorf("unsupported type: %T", value))
 	}
 }
