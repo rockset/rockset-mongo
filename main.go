@@ -82,6 +82,7 @@ func export(args []string) {
 	}
 	defer out.Close()
 
+	dump.CollectionInfo(ctx)
 	log.Logvf(log.Always, "exporting")
 	if err = dump.Dump(ctx, out); err != nil {
 		log.Logvf(log.Always, "Failed: %v", err)
