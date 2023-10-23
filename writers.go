@@ -92,6 +92,8 @@ func (w *DirectoryWriter) closeFile(f *os.File) error {
 }
 
 // Write implements io.WriteCloser.
+// FIXME: This assumes that the bson document is written enitrely in a single call;
+// Otherwise, a doc might be torn and shredded in multiple files
 func (w *DirectoryWriter) Write(p []byte) (int, error) {
 	if err := w.maybeRotate(); err != nil {
 		return 0, err
