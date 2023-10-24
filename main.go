@@ -10,6 +10,8 @@ import (
 	"github.com/mongodb/mongo-tools/common/progress"
 	"github.com/mongodb/mongo-tools/common/signals"
 	"github.com/mongodb/mongo-tools/common/util"
+	"github.com/rockset/rockset-mongo/pkg/mongo"
+	"github.com/rockset/rockset-mongo/pkg/writers"
 )
 
 const (
@@ -64,9 +66,8 @@ func export(args []string) {
 	progressManager.Start()
 	defer progressManager.Stop()
 
-	dump := MongoDump{
+	dump := mongo.MongoDump{
 		ToolOptions:     opts.ToolOptions,
-		InputOptions:    opts.InputOptions,
 		ProgressManager: progressManager,
 	}
 
@@ -75,7 +76,11 @@ func export(args []string) {
 		os.Exit(util.ExitFailure)
 	}
 
-	out, err := NewWriter(ctx, &opts)
+	out, err := writers.NewWriter(ctx, &writers.WriterOptions{
+		Out:             opts.Out,
+		TargetChunkSize: uint64(opts.TargetSize),
+		FilePrefix:      opts.ToolOptions.DB + "." + opts.ToolOptions.Collection + ".",
+	})
 	if err != nil {
 		log.Logvf(log.Always, "Failed to create writer: %v", err)
 		os.Exit(util.ExitFailure)

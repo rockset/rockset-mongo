@@ -1,4 +1,4 @@
-package main
+package mongo
 
 import (
 	"context"
@@ -10,14 +10,15 @@ import (
 	"github.com/mongodb/mongo-tools/common/options"
 	"github.com/mongodb/mongo-tools/common/progress"
 	"github.com/mongodb/mongo-tools/common/util"
+	"github.com/rockset/rockset-mongo/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 type MongoDump struct {
-	ToolOptions  *options.ToolOptions
-	InputOptions *InputOptions
+	ToolOptions *options.ToolOptions
+	// InputOptions *InputOptions
 
 	ProgressManager progress.Manager
 	SessionProvider *db.SessionProvider
@@ -33,11 +34,12 @@ type MongoDump struct {
 func (dump *MongoDump) Init() error {
 	log.Logvf(log.DebugHigh, "initializing mongodump object")
 
-	pref, err := db.NewReadPreference(dump.InputOptions.ReadPreference, dump.ToolOptions.URI.ParsedConnString())
-	if err != nil {
-		return fmt.Errorf("error parsing --readPreference : %v", err)
-	}
-	dump.ToolOptions.ReadPreference = pref
+	var err error
+	// pref, err := db.NewReadPreference(dump.InputOptions.ReadPreference, dump.ToolOptions.URI.ParsedConnString())
+	// if err != nil {
+	// 	return fmt.Errorf("error parsing --readPreference : %v", err)
+	// }
+	// dump.ToolOptions.ReadPreference = pref
 
 	dump.SessionProvider, err = db.NewSessionProvider(*dump.ToolOptions)
 	if err != nil {
@@ -63,7 +65,7 @@ func (dump *MongoDump) Init() error {
 	dump.dbNamespace = dump.ToolOptions.DB + "." + dump.ToolOptions.Collection
 
 	// warn if we are trying to dump from a secondary in a sharded cluster
-	if dump.isMongos && pref != readpref.Primary() {
+	if dump.isMongos && dump.ToolOptions.ReadPreference != readpref.Primary() {
 		log.Logvf(log.Always, db.WarningNonPrimaryMongosConnection)
 	}
 
@@ -204,7 +206,7 @@ func (dump *MongoDump) dumpValidatedIterToWriter(
 	return termErr
 }
 
-func (dump *MongoDump) CollectionInfo(ctx context.Context) (*CollectionInfo, error) {
+func (dump *MongoDump) CollectionInfo(ctx context.Context) (*config.CollectionInfo, error) {
 	stream, err := dump.collection.Watch(ctx, mongo.Pipeline{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to read changelog stream: %w", err)
@@ -226,11 +228,42 @@ func (dump *MongoDump) CollectionInfo(ctx context.Context) (*CollectionInfo, err
 		return nil, fmt.Errorf("error decoding collStats: %w", err)
 	}
 
-	info := &CollectionInfo{
+	info := &config.CollectionInfo{
 		Documents:   toUint64(stats["count"]),
 		Size:        toUint64(stats["size"]),
 		ResumeToken: stream.ResumeToken().String(),
 	}
 	log.Logvf(log.Always, "collection stats %+v", info)
 	return info, nil
+}
+
+func toUint64(value interface{}) uint64 {
+	switch v := value.(type) {
+	// all supported numerical types (except for complex)
+	case uint8:
+		return uint64(v)
+	case uint16:
+		return uint64(v)
+	case uint32:
+		return uint64(v)
+	case uint64:
+		return uint64(v)
+
+	case int8:
+		return uint64(v)
+	case int16:
+		return uint64(v)
+	case int32:
+		return uint64(v)
+	case int64:
+		return uint64(v)
+
+	case float32:
+		return uint64(v)
+	case float64:
+		return uint64(v)
+
+	default:
+		panic(fmt.Errorf("unsupported type: %T", value))
+	}
 }
