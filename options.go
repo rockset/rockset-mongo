@@ -3,8 +3,12 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 
 	"github.com/mongodb/mongo-tools/common/options"
+	"github.com/pkg/errors"
+	"github.com/rockset/rockset-mongo/pkg/config"
+	"gopkg.in/yaml.v2"
 )
 
 var Usage = `<options> <connection-string>
@@ -72,7 +76,7 @@ func ParseOptions(rawArgs []string, versionStr, gitCommit string) (Options, erro
 	outputOpts := &OutputOptions{}
 	opts.AddOptions(outputOpts)
 
-	extraArgs, err := opts.ParseArgs(rawArgs)
+	extraArgs, err := ParseArgs(opts, rawArgs)
 	if err != nil {
 		return Options{}, err
 	}
@@ -85,4 +89,63 @@ func ParseOptions(rawArgs []string, versionStr, gitCommit string) (Options, erro
 	}
 
 	return Options{opts, inputOpts, outputOpts}, nil
+}
+
+func ParseArgs(opts *options.ToolOptions, args []string) ([]string, error) {
+	options.LogSensitiveOptionWarnings(args)
+
+	if err := ParseConfigFile(opts, args); err != nil {
+		return []string{}, err
+	}
+
+	args, err := opts.CallArgParser(args)
+	if err != nil {
+		return []string{}, err
+	}
+
+	err = opts.NormalizeOptionsAndURI()
+	if err != nil {
+		return []string{}, err
+	}
+
+	return args, err
+}
+
+func ParseConfigFile(opts *options.ToolOptions, args []string) error {
+	// Get config file path from the arguments, if specified.
+	_, err := opts.CallArgParser(args)
+	if err != nil {
+		return err
+	}
+
+	// No --config option was specified.
+	if opts.General.ConfigPath == "" {
+		return nil
+	}
+
+	// --config option siputils a file path.
+	configBytes, err := os.ReadFile(opts.General.ConfigPath)
+	if err != nil {
+		return errors.Wrapf(err, "error opening file with --config")
+	}
+
+	// Unmarshal the config file as a top-level YAML file.
+	var config config.Config
+	err = yaml.UnmarshalStrict(configBytes, &config)
+	if err != nil {
+		return errors.Wrapf(err, "error parsing config file %s", opts.General.ConfigPath)
+	}
+
+	// Assign each parsed value to its respective ToolOptions field.
+	opts.URI.ConnectionString = config.Mongo.Uri
+
+	//// Mongomirror has an extra option to set.
+	//for _, extraOpt := range opts.URI.extraOptionsRegistry {
+	//if destinationAuth, ok := extraOpt.(DestinationAuthOptions); ok {
+	//destinationAuth.SetDestinationPassword(config.DestinationPassword)
+	//break
+	//}
+	//}
+
+	return nil
 }
