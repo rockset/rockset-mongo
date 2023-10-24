@@ -79,7 +79,7 @@ func export(args []string) {
 	out, err := writers.NewWriter(ctx, &writers.WriterOptions{
 		Out:             opts.Out,
 		TargetChunkSize: uint64(opts.TargetSize),
-		FilePrefix:      opts.ToolOptions.DB + "." + opts.ToolOptions.Collection + ".",
+		FilePrefix:      opts.ToolOptions.DB + "." + opts.ToolOptions.Collection,
 	})
 	if err != nil {
 		log.Logvf(log.Always, "Failed to create writer: %v", err)
