@@ -130,7 +130,25 @@ func (d *Driver) createCollection(ctx context.Context) error {
 }
 
 func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
-	return fmt.Errorf("not implemented yet")
+	for ctx.Err() == nil {
+		coll, err := d.creator.GetCollection(ctx)
+		if err != nil && !strings.Contains(err.Error(), "does not exist in") {
+			return fmt.Errorf("failed to get collection info: %w", err)
+		}
+
+		collState, _ := d.creator.CollectionState(&coll)
+		log.Logvf(log.Always, "collection state: %v", collState)
+
+		if collState >= rockcollection.INITIAL_LOAD_DONE {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return fmt.Errorf("timed out before collection is ready: %w", ctx.Err())
 }
 
 func (d *Driver) createMongoDbSource(ctx context.Context) error {
@@ -193,14 +211,14 @@ func (d *Driver) run(ctx context.Context) error {
 	d.persistState()
 
 	coll, err := d.creator.GetCollection(ctx)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "does not exist in") {
 		return fmt.Errorf("failed to get collection info: %w", err)
 	}
 
 	collState, _ := d.creator.CollectionState(&coll)
 	log.Logvf(log.Always, "collection state: %v", collState)
 	if collState <= rockcollection.DOESNOT_EXIST {
-		if err := d.createMongoDbSource(ctx); err != nil {
+		if err := d.createCollection(ctx); err != nil {
 			return fmt.Errorf("failed to create collection: %w", err)
 		}
 		d.persistState()

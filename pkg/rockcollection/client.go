@@ -30,6 +30,23 @@ const (
 	STREAMING
 )
 
+func (s CollectionState) String() string {
+	switch s {
+	case DOESNOT_EXIST:
+		return "DOESNOT_EXIST"
+	case INITIAL_LOAD_IN_PROGRESS:
+		return "INITIAL_LOAD_IN_PROGRESS"
+	case INITIAL_LOAD_DONE:
+		return "INITIAL_LOAD_DONE"
+	case STREAMING_WITH_S3:
+		return "STREAMING_WITH_S3"
+	case STREAMING:
+		return "STREAMING"
+	default:
+		return fmt.Sprintf("%d", s)
+	}
+}
+
 func NewClient(conf *config.Config, state *config.State) (*CollectionCreator, error) {
 	rc, err := rockset.NewClient(func(rc *rockset.RockConfig) {
 		// environment variables overide config
@@ -56,6 +73,10 @@ func NewClient(conf *config.Config, state *config.State) (*CollectionCreator, er
 }
 
 func (rc *CollectionCreator) CollectionState(coll *openapi.Collection) (CollectionState, error) {
+	if coll == nil {
+		return DOESNOT_EXIST, nil
+	}
+
 	var s3, mongo *openapi.Source
 	for _, s := range coll.Sources {
 		if s.S3 != nil {
