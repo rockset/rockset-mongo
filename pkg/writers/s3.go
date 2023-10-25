@@ -32,10 +32,10 @@ type S3Writer struct {
 	uploader *manager.Uploader
 }
 
-var _ io.WriteCloser = (*S3Writer)(nil)
+var _ OutputWriter = (*S3Writer)(nil)
 
 // Close implements io.WriteCloser.
-func NewS3Writer(ctx context.Context, opts *WriterOptions) (io.WriteCloser, error) {
+func NewS3Writer(ctx context.Context, opts *WriterOptions) (*S3Writer, error) {
 	uri, err := url.ParseRequestURI(opts.Out)
 	if err != nil {
 		return nil, fmt.Errorf("invalid S3 path %v: %w", opts.Out, err)
