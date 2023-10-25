@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"reflect"
 	"strings"
 
+	"github.com/mongodb/mongo-tools/common/log"
 	"github.com/rockset/rockset-go-client"
 	"github.com/rockset/rockset-go-client/openapi"
 )
@@ -59,6 +59,7 @@ func (c *RocksetRawClient) PreparePostRequest(ctx context.Context, path string, 
 		}
 
 		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url.String(), bytes.NewBuffer(bodyBytes))
+		req.Header.Add("Content-Type", "application/json")
 	} else {
 		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url.String(), nil)
 	}
@@ -81,7 +82,7 @@ func (c *RocksetRawClient) doCall(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("\n%s\n", string(dump))
+		log.Logvf(log.Always, "\n%s\n", string(dump))
 	}
 
 	resp, err := cfg.HTTPClient.Do(req)
@@ -94,7 +95,7 @@ func (c *RocksetRawClient) doCall(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return resp, err
 		}
-		log.Printf("\n%s\n", string(dump))
+		log.Logvf(log.Always, "\n%s\n", string(dump))
 	}
 	return resp, err
 }
@@ -127,6 +128,7 @@ func (c *RocksetRawClient) Execute(req *http.Request, respValue interface{}) (*h
 			}
 			newErr.error = formatErrorMessage(resp.Status, &v)
 			newErr.model = v
+			log.Logvf(log.Always, "request failed: %+v", newErr.error)
 		}
 		return resp, newErr
 	}
