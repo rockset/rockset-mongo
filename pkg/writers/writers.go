@@ -15,22 +15,56 @@ type WriterOptions struct {
 	FilePrefix      string
 }
 
-func NewWriter(ctx context.Context, opts *WriterOptions) (io.WriteCloser, error) {
+type Stats struct {
+	docs  uint64
+	bytes uint64
+	files uint64
+}
+
+type OutputWriter interface {
+	// Write a single bson document
+	Write(p []byte) (n int, err error)
+
+	io.Closer
+
+	Stats() Stats
+}
+
+func NewWriter(ctx context.Context, opts *WriterOptions) (OutputWriter, error) {
 	if opts.Out == "-" {
-		return &nopCloserWriter{os.Stdout}, nil
+		return NewStreamWrapper(os.Stdout), nil
 	} else if strings.HasPrefix(opts.Out, "s3://") {
 		return NewS3Writer(ctx, opts)
 	}
 	return NewDirectoryWriter(opts.Out, opts)
 }
 
-type nopCloserWriter struct {
-	io.Writer
+type streamWrapper struct {
+	writer io.Writer
+	stats  Stats
+}
+
+func NewStreamWrapper(writer io.Writer) *streamWrapper {
+	return &streamWrapper{
+		writer: writer,
+		stats:  Stats{files: 1},
+	}
 }
 
 // Close implements io.WriteCloser.
-func (*nopCloserWriter) Close() error {
+func (w *streamWrapper) Write(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	w.stats.docs++
+	w.stats.bytes += uint64(n)
+	return n, err
+}
+
+func (w *streamWrapper) Close() error {
 	return nil
+}
+
+func (w *streamWrapper) Stats() Stats {
+	return w.stats
 }
 
 type DirectoryWriter struct {
@@ -43,9 +77,10 @@ type DirectoryWriter struct {
 	f            *os.File
 
 	onClosed func(f *os.File) error
+	stats    Stats
 }
 
-var _ io.WriteCloser = (*DirectoryWriter)(nil)
+var _ OutputWriter = (*DirectoryWriter)(nil)
 
 func NewDirectoryWriter(out string, opts *WriterOptions) (*DirectoryWriter, error) {
 	if _, err := os.Stat(out); err == nil {
@@ -98,6 +133,8 @@ func (w *DirectoryWriter) Write(p []byte) (int, error) {
 	}
 
 	n, err := w.f.Write(p)
+	w.stats.docs++
+	w.stats.bytes += uint64(n)
 	w.writtenBytes += uint64(n)
 	return n, err
 }
@@ -120,6 +157,11 @@ func (w *DirectoryWriter) maybeRotate() error {
 		return fmt.Errorf("failed to create new file: %w", err)
 	}
 	w.writtenBytes = 0
+	w.stats.files++
 
 	return nil
+}
+
+func (w *DirectoryWriter) Stats() Stats {
+	return w.stats
 }

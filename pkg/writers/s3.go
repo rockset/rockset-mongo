@@ -133,3 +133,7 @@ func (w *S3Writer) uploadFile(f *os.File) error {
 
 	return nil
 }
+
+func (w *S3Writer) Stats() Stats {
+	return w.fs.stats
+}
