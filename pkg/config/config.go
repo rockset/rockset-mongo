@@ -23,7 +23,7 @@ type MongoConfig struct {
 	DB          string `yaml:"db"`
 	Collection  string `yaml:"collection"`
 
-	TargetChunkSize uint64 `yaml:"target_file_size"`
+	TargetChunkSizeMB uint64 `yaml:"target_file_size_mb"`
 }
 
 type Config struct {

@@ -38,7 +38,7 @@ func (d *Driver) preflight(ctx context.Context) error {
 }
 
 func (d *Driver) prepare(ctx context.Context) error {
-	d.config.Mongo.TargetChunkSize = 250 * 1024 * 1024
+	d.config.Mongo.TargetChunkSizeMB = 250
 	if d.dumpOpts.DB != "" {
 		d.config.Mongo.DB = d.dumpOpts.DB
 	}
@@ -86,7 +86,7 @@ func (d *Driver) export(ctx context.Context) error {
 	s3Uri := strings.TrimRight(d.config.S3.Uri, "/") + "/" + d.state.ID.String()
 	out, err := writers.NewWriter(ctx, &writers.WriterOptions{
 		Out:             s3Uri,
-		TargetChunkSize: d.config.Mongo.TargetChunkSize,
+		TargetChunkSize: d.config.Mongo.TargetChunkSizeMB * 1024 * 1024,
 		FilePrefix:      d.config.Mongo.DB + "." + d.config.Mongo.Collection,
 	})
 	if err != nil {

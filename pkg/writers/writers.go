@@ -95,7 +95,7 @@ func NewDirectoryWriter(out string, opts *WriterOptions) (*DirectoryWriter, erro
 
 	return &DirectoryWriter{
 		dirPath:    out,
-		sizeCutoff: uint64(opts.TargetChunkSize) * 1024 * 1024,
+		sizeCutoff: uint64(opts.TargetChunkSize),
 		fileFormat: opts.FilePrefix + ".%04d",
 	}, nil
 
