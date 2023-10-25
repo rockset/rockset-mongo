@@ -1,3 +1,4 @@
 config
 rockset-mongo
 dump
+state.json
