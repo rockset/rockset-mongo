@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/mongodb/mongo-tools/common/progress"
 	"github.com/mongodb/mongo-tools/common/signals"
 	"github.com/mongodb/mongo-tools/common/util"
+	"github.com/rockset/rockset-mongo/pkg/config"
 	"github.com/rockset/rockset-mongo/pkg/mongo"
 	"github.com/rockset/rockset-mongo/pkg/writers"
 )
@@ -30,7 +30,56 @@ func main() {
 		return
 	}
 
-	fmt.Println("FOUND ARGS ", os.Args)
+	run(os.Args[1:])
+}
+
+func run(args []string) {
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+	finishedChan := signals.HandleWithInterrupt(cancelFn)
+	defer close(finishedChan)
+
+	opts, err := ParseOptions(args, VersionStr, GitCommit)
+	if err != nil {
+		log.Logvf(log.Always, "error parsing command line options: %s", err.Error())
+		log.Logvf(log.Always, util.ShortUsage("mongodump"))
+		os.Exit(util.ExitFailure)
+	}
+
+	// print help, if specified
+	if opts.PrintHelp(false) {
+		return
+	}
+
+	// print version, if specified
+	if opts.PrintVersion() {
+		return
+	}
+	log.SetVerbosity(opts.Verbosity)
+
+	conf, err := config.ReadConfig(opts.ConfigPath)
+	if err != nil {
+		log.Logvf(log.Always, "error parsing config file: %v", err)
+		os.Exit(util.ExitFailure)
+	}
+
+	state, err := config.ReadState("state.json")
+	if err != nil {
+		log.Logvf(log.Always, "error parsing state file: %v", err)
+		os.Exit(util.ExitFailure)
+	}
+
+	// init logger
+	d := &Driver{
+		config:   conf,
+		state:    state,
+		dumpOpts: *opts.ToolOptions,
+	}
+
+	if err := d.run(ctx); err != nil {
+		log.Logvf(log.Always, "error: %v", err)
+		os.Exit(util.ExitFailure)
+	}
 }
 
 func export(args []string) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mongodb/mongo-tools/common/log"
 	"github.com/rockset/rockset-go-client"
 	"github.com/rockset/rockset-go-client/openapi"
 	"github.com/rockset/rockset-mongo/pkg/config"
@@ -25,6 +26,7 @@ const (
 	DOESNOT_EXIST CollectionState = iota
 	INITIAL_LOAD_IN_PROGRESS
 	INITIAL_LOAD_DONE
+	STREAMING_WITH_S3
 	STREAMING
 )
 
@@ -35,8 +37,9 @@ func NewClient(conf *config.Config, state *config.State) (*CollectionCreator, er
 			rc.APIKey = conf.Rockset.ApiKey
 		}
 		if rc.APIServer == "" {
-			rc.APIKey = conf.Rockset.ApiServer
+			rc.APIServer = conf.Rockset.ApiServer
 		}
+		log.Logvf(log.Always, "create rc client api_key=%v api_server=%v", rc.APIKey, rc.APIServer)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a Rockset client: %w", err)
@@ -63,15 +66,20 @@ func (rc *CollectionCreator) CollectionState(coll *openapi.Collection) (Collecti
 	}
 
 	if mongo != nil {
-		return STREAMING, nil
+		if s3 == nil {
+			return STREAMING, nil
+		}
+		return STREAMING_WITH_S3, nil
+	}
+	if s3 != nil {
+		state := sourceState(s3)
+		if state == "COMPLETED" || state == "WATCHING" {
+			return INITIAL_LOAD_DONE, nil
+		}
+		return INITIAL_LOAD_IN_PROGRESS, nil
 	}
 
-	if s3 == nil {
-		return DOESNOT_EXIST, fmt.Errorf("unexpected state; no S3 or Mongo sources: %+v", coll.Sources)
-	} else if state := sourceState(s3); state == "COMPLETED" || state == "WATCHING" {
-		return INITIAL_LOAD_DONE, nil
-	}
-	return INITIAL_LOAD_IN_PROGRESS, nil
+	return DOESNOT_EXIST, fmt.Errorf("unexpected state; no S3 or Mongo sources: %+v", coll.Sources)
 }
 
 func sourceState(s *openapi.Source) string {
@@ -86,13 +94,19 @@ func (rc *CollectionCreator) GetCollection(ctx context.Context) (openapi.Collect
 	return rc.c.GetCollection(ctx, rc.conf.Workspace, rc.conf.CollectionName)
 }
 
+func (rc *CollectionCreator) DeleteSource(ctx context.Context, id string) error {
+	req := rc.c.SourcesApi.DeleteSource(ctx, rc.conf.Workspace, rc.conf.CollectionName, id)
+	_, _, err := rc.c.SourcesApi.DeleteSourceExecute(req)
+	return err
+}
+
 func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*openapi.Collection, error) {
 	body := map[string]interface{}{}
 	for k, v := range rc.conf.CreateCollectionRequest {
 		body[k] = v
 	}
 
-	body["collection"] = rc.conf.CollectionName
+	body["name"] = rc.conf.CollectionName
 	body["sources"] = []map[string]interface{}{{
 		"integration_name": rc.conf.S3.Integration,
 		"format_params":    map[string]interface{}{"bson": true},
@@ -104,9 +118,10 @@ func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*open
 
 	path := fmt.Sprintf("/v1/orgs/self/ws/%s/collections", rc.conf.Workspace)
 
+	log.Logvf(log.Always, "creating with body %+v", body)
 	req, err := rc.raw.PreparePostRequest(ctx, path, body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create a question: %w", err)
+		return nil, fmt.Errorf("failed to create a collection: %w", err)
 	}
 
 	var resp openapi.Collection
