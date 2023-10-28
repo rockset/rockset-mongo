@@ -11,7 +11,6 @@ import (
 	"github.com/mongodb/mongo-tools/common/log"
 	"github.com/mongodb/mongo-tools/common/options"
 	"github.com/mongodb/mongo-tools/common/progress"
-	"github.com/rockset/rockset-go-client/openapi"
 	"github.com/rockset/rockset-mongo/pkg/config"
 	"github.com/rockset/rockset-mongo/pkg/mongo"
 	"github.com/rockset/rockset-mongo/pkg/rockcollection"
@@ -23,8 +22,7 @@ type Driver struct {
 	state    *config.State
 	dumpOpts options.ToolOptions
 
-	creator    *rockcollection.CollectionCreator
-	collection *openapi.Collection
+	creator *rockcollection.CollectionCreator
 }
 
 func (d *Driver) preflight(ctx context.Context) error {
