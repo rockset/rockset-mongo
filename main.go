@@ -136,9 +136,22 @@ func export(args []string) {
 	}
 	defer out.Close()
 
+	info, err := dump.CollectionInfo(ctx)
+	if err != nil {
+		log.Logvf(log.Always, "failed to get collection info: %w", err)
+		os.Exit(util.ExitFailure)
+	}
+
+	dumpProgressor := progress.NewCounter(int64(info.Documents))
+	dbNamespace := opts.DB + "." + opts.Collection
+	if dump.ProgressManager != nil {
+		dump.ProgressManager.Attach(dbNamespace, dumpProgressor)
+		defer dump.ProgressManager.Detach(dbNamespace)
+	}
+
 	dump.CollectionInfo(ctx)
 	log.Logvf(log.Always, "exporting")
-	if err = dump.Dump(ctx, out); err != nil {
+	if err = dump.Dump(ctx, out, dumpProgressor); err != nil {
 		log.Logvf(log.Always, "Failed: %v", err)
 		os.Exit(util.ExitFailure)
 	}

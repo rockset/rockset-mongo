@@ -95,8 +95,15 @@ func (d *Driver) export(ctx context.Context) error {
 	}
 	d.state.CollectionInfo = info
 
+	dumpProgressor := progress.NewCounter(int64(info.Documents))
+	dbNamespace := d.dumpOpts.DB + "." + d.dumpOpts.Collection
+	if dump.ProgressManager != nil {
+		dump.ProgressManager.Attach(dbNamespace, dumpProgressor)
+		defer dump.ProgressManager.Detach(dbNamespace)
+	}
+
 	log.Logvf(log.Always, "Started export")
-	if err = dump.Dump(ctx, out); err != nil {
+	if err = dump.Dump(ctx, out, dumpProgressor); err != nil {
 		return fmt.Errorf("failed to export data: %w", err)
 	}
 

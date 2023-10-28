@@ -76,7 +76,7 @@ func (dump *MongoDump) Close() {
 	dump.SessionProvider.Close()
 }
 
-func (dump *MongoDump) Dump(ctx context.Context, writer io.Writer) error {
+func (dump *MongoDump) Dump(ctx context.Context, writer io.Writer, dumpProgressor progress.Updateable) error {
 	session, err := dump.SessionProvider.GetSession()
 	if err != nil {
 		return fmt.Errorf("error getting a client session: %v", err)
@@ -87,10 +87,10 @@ func (dump *MongoDump) Dump(ctx context.Context, writer io.Writer) error {
 	}
 	log.Logvf(log.DebugLow, "exporting collection")
 
-	return dump.dumpCollection(ctx, writer)
+	return dump.dumpCollection(ctx, writer, dumpProgressor)
 }
 
-func (dump *MongoDump) dumpCollection(ctx context.Context, writer io.Writer) error {
+func (dump *MongoDump) dumpCollection(ctx context.Context, writer io.Writer, dumpProgressor progress.Updateable) error {
 	query := &db.DeferredQuery{Coll: dump.collection}
 
 	isMMAPV1, err := db.IsMMAPV1(dump.collection.Database(), dump.collection.Name())
@@ -103,7 +103,7 @@ func (dump *MongoDump) dumpCollection(ctx context.Context, writer io.Writer) err
 		query.Hint = bson.D{{"_id", 1}}
 	}
 
-	dumpCount, err := dump.dumpValidatedQuery(ctx, query, writer)
+	dumpCount, err := dump.dumpValidatedQuery(ctx, query, writer, dumpProgressor)
 	if err == nil {
 		// on success, print the document count
 		log.Logvf(log.Always, "dumped %v documents", dumpCount)
@@ -129,18 +129,7 @@ func (dump *MongoDump) getCount(query *db.DeferredQuery) (int64, error) {
 // and writes the raw bson results to the writer. Returns a final count of documents
 // dumped, and any errors that occurred.
 func (dump *MongoDump) dumpValidatedQuery(
-	ctx context.Context, query *db.DeferredQuery, writer io.Writer) (dumpCount int64, err error) {
-
-	total, err := dump.getCount(query)
-	if err != nil {
-		return 0, err
-	}
-
-	dumpProgressor := progress.NewCounter(total)
-	if dump.ProgressManager != nil {
-		dump.ProgressManager.Attach(dump.dbNamespace, dumpProgressor)
-		defer dump.ProgressManager.Detach(dump.dbNamespace)
-	}
+	ctx context.Context, query *db.DeferredQuery, writer io.Writer, dumpProgressor progress.Updateable) (dumpCount int64, err error) {
 
 	cursor, err := query.Iter()
 	if err != nil {
