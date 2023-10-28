@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 )
 
 type WriterOptions struct {
@@ -54,8 +55,8 @@ func NewStreamWrapper(writer io.Writer) *streamWrapper {
 // Close implements io.WriteCloser.
 func (w *streamWrapper) Write(p []byte) (int, error) {
 	n, err := w.writer.Write(p)
-	w.stats.docs++
-	w.stats.bytes += uint64(n)
+	atomic.AddUint64(&w.stats.docs, 1)
+	atomic.AddUint64(&w.stats.bytes, uint64(n))
 	return n, err
 }
 
@@ -133,9 +134,9 @@ func (w *DirectoryWriter) Write(p []byte) (int, error) {
 	}
 
 	n, err := w.f.Write(p)
-	w.stats.docs++
-	w.stats.bytes += uint64(n)
-	w.writtenBytes += uint64(n)
+	atomic.AddUint64(&w.stats.docs, 1)
+	atomic.AddUint64(&w.stats.bytes, uint64(n))
+	atomic.AddUint64(&w.writtenBytes, uint64(n))
 	return n, err
 }
 
