@@ -111,19 +111,6 @@ func (dump *MongoDump) dumpCollection(ctx context.Context, writer io.Writer, dum
 	return err
 }
 
-// getCount counts the number of documents in the namespace for the given intent. It does not run the count for
-// the oplog collection to avoid the performance issue in TOOLS-2068.
-func (dump *MongoDump) getCount(query *db.DeferredQuery) (int64, error) {
-	log.Logvf(log.DebugHigh, "Getting estimated count for %v.%v", query.Coll.Database().Name(), query.Coll.Name())
-	total, err := query.Count(false)
-	if err != nil {
-		return 0, fmt.Errorf("error getting count from db: %v", err)
-	}
-
-	log.Logvf(log.DebugLow, "counted %v documents in %v", total, dump.dbNamespace)
-	return int64(total), nil
-}
-
 // dumpValidatedQueryToIntent takes an mgo Query, its intent, a writer, and a document validator, performs the query,
 // validates the results with the validator,
 // and writes the raw bson results to the writer. Returns a final count of documents
