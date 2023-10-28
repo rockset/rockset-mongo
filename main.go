@@ -138,7 +138,7 @@ func export(args []string) {
 
 	info, err := dump.CollectionInfo(ctx)
 	if err != nil {
-		log.Logvf(log.Always, "failed to get collection info: %w", err)
+		log.Logvf(log.Always, "failed to get collection info: %v", err)
 		os.Exit(util.ExitFailure)
 	}
 
