@@ -176,7 +176,7 @@ func (rc *CollectionCreator) AddMongoSource(ctx context.Context) (*openapi.GetSo
 			"database_name":          rc.conf.Mongo.DB,
 			"collection_name":        rc.conf.Mongo.Collection,
 			"retrieve_full_document": hasTransformation,
-			"initial_resume_token":   rc.state.CollectionInfo.ResumeToken,
+			"initial_resume_token":   rc.state.MongoDBCollectionInfo.ResumeToken,
 		},
 	}
 

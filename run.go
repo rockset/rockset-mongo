@@ -93,7 +93,7 @@ func (d *Driver) export(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get collection info: %w", err)
 	}
-	d.state.CollectionInfo = info
+	d.state.MongoDBCollectionInfo = info
 
 	dumpProgressor := progress.NewCounter(int64(info.Documents))
 	dbNamespace := d.dumpOpts.DB + "." + d.dumpOpts.Collection

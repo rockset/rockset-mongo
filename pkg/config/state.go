@@ -10,9 +10,9 @@ import (
 )
 
 type State struct {
-	ID             uuid.UUID       `json:"id"`
-	ExportInfo     *ExportInfo     `json:"export"`
-	CollectionInfo *CollectionInfo `json:"collection_info"`
+	ID                    uuid.UUID              `json:"id"`
+	ExportInfo            *ExportInfo            `json:"export"`
+	MongoDBCollectionInfo *MongoDBCollectionInfo `json:"mongodb_collection_info"`
 }
 
 type ExportInfo struct {
@@ -23,7 +23,7 @@ type ExportInfo struct {
 	Prefix string `json:"s3_prefix"`
 }
 
-type CollectionInfo struct {
+type MongoDBCollectionInfo struct {
 	ResumeToken string `json:"resume_token"`
 	Documents   uint64 `json:"documents"`
 	Size        uint64 `json:"storage"`
