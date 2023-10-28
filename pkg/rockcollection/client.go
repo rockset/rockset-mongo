@@ -59,7 +59,7 @@ func NewClient(conf *config.Config, state *config.State) (*CollectionCreator, er
 		if rc.APIServer == "" {
 			rc.APIServer = conf.Rockset.ApiServer
 		}
-		log.Logvf(log.Always, "create rc client api_key=%v api_server=%v", rc.APIKey, rc.APIServer)
+		log.Logvf(log.DebugHigh, "create rc client api_key=%v api_server=%v", rc.APIKey, rc.APIServer)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a Rockset client: %w", err)
@@ -153,7 +153,7 @@ func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*open
 
 	path := fmt.Sprintf("/v1/orgs/self/ws/%s/collections", rc.rocksetWorkspace)
 
-	log.Logvf(log.Always, "creating with body %+v", body)
+	log.Logvf(log.DebugLow, "creating with body %+v", body)
 	req, err := rc.raw.PreparePostRequest(ctx, path, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a collection: %w", err)

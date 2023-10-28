@@ -95,18 +95,18 @@ func (dump *MongoDump) dumpCollection(ctx context.Context, writer io.Writer, dum
 
 	isMMAPV1, err := db.IsMMAPV1(dump.collection.Database(), dump.collection.Name())
 	if err != nil {
-		log.Logvf(log.Always,
+		log.Logvf(log.DebugHigh,
 			"failed to determine storage engine, an mmapv1 storage engine could result in"+
 				" inconsistent dump results, error was: %v", err)
 	} else if isMMAPV1 {
-		log.Logvf(log.Always, "running with MMAP, setting _id hint")
+		log.Logvf(log.DebugHigh, "running with MMAP, setting _id hint")
 		query.Hint = bson.D{{"_id", 1}}
 	}
 
 	dumpCount, err := dump.dumpValidatedQuery(ctx, query, writer, dumpProgressor)
 	if err == nil {
 		// on success, print the document count
-		log.Logvf(log.Always, "dumped %v documents", dumpCount)
+		log.Logvf(log.DebugHigh, "dumped %v documents", dumpCount)
 	}
 	return err
 }
@@ -204,7 +204,7 @@ func (dump *MongoDump) CollectionInfo(ctx context.Context) (*config.CollectionIn
 	defer stream.Close(context.TODO())
 
 	if stream.TryNext(ctx) {
-		log.Logvf(log.Always, "read %v", stream.Current.String())
+		log.Logvf(log.DebugHigh, "read %v", stream.Current.String())
 	}
 
 	r := dump.collection.Database().RunCommand(ctx, bson.M{"collStats": dump.collection.Name()})
@@ -222,7 +222,7 @@ func (dump *MongoDump) CollectionInfo(ctx context.Context) (*config.CollectionIn
 		Size:        toUint64(stats["size"]),
 		ResumeToken: stream.ResumeToken().String(),
 	}
-	log.Logvf(log.Always, "collection stats %+v", info)
+	log.Logvf(log.DebugHigh, "collection stats %+v", info)
 	return info, nil
 }
 

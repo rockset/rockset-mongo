@@ -43,7 +43,7 @@ func NewS3Writer(ctx context.Context, opts *WriterOptions) (*S3Writer, error) {
 	if uri.Scheme != "s3" {
 		return nil, fmt.Errorf("path is not s3: %s", opts.Out)
 	}
-	log.Logvf(log.Always, "uri %+v", uri)
+	log.Logvf(log.DebugLow, "uri %+v", uri)
 
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
