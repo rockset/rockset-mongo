@@ -28,11 +28,8 @@ type Driver struct {
 }
 
 func (d *Driver) preflight(ctx context.Context) error {
-	if d.config.CollectionName == "" {
-		return fmt.Errorf("missing `collection`")
-	}
-	if d.config.Workspace == "" {
-		return fmt.Errorf("missing `workspace`")
+	if d.config.RocksetCollection == "" {
+		return fmt.Errorf("missing rockset `collection`")
 	}
 	return nil
 }
@@ -204,7 +201,7 @@ func (d *Driver) run(ctx context.Context) error {
 	}
 	d.persistState()
 
-	log.Logvf(log.Always, "creating collection %v.%v", d.config.Workspace, d.config.CollectionName)
+	log.Logvf(log.Always, "creating collection %v", d.config.RocksetCollection)
 	// if err := d.createCollection(ctx); err != nil {
 	// 	return fmt.Errorf("failed to create collection: %w", err)
 	// }

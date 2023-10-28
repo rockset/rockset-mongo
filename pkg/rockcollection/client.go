@@ -18,6 +18,9 @@ type CollectionCreator struct {
 
 	conf  *config.Config
 	state *config.State
+
+	rocksetWorkspace  string
+	rocksetCollection string
 }
 
 type CollectionState int
@@ -62,14 +65,25 @@ func NewClient(conf *config.Config, state *config.State) (*CollectionCreator, er
 		return nil, fmt.Errorf("failed to create a Rockset client: %w", err)
 	}
 
+	workspace, collection := workspaceCollection(conf.RocksetCollection)
 	c := &CollectionCreator{
-		c:     rc,
-		raw:   rockhttp.NewRocksetRawClient(rc),
-		conf:  conf,
-		state: state,
+		c:                 rc,
+		raw:               rockhttp.NewRocksetRawClient(rc),
+		conf:              conf,
+		state:             state,
+		rocksetWorkspace:  workspace,
+		rocksetCollection: collection,
 	}
 
 	return c, nil
+}
+
+func workspaceCollection(s string) (string, string) {
+	idx := strings.LastIndexByte(s, '.')
+	if idx < 0 {
+		return "commons", s
+	}
+	return s[:idx], s[idx+1:]
 }
 
 func (rc *CollectionCreator) CollectionState(coll *openapi.Collection) (CollectionState, error) {
@@ -112,11 +126,11 @@ func sourceState(s *openapi.Source) string {
 }
 
 func (rc *CollectionCreator) GetCollection(ctx context.Context) (openapi.Collection, error) {
-	return rc.c.GetCollection(ctx, rc.conf.Workspace, rc.conf.CollectionName)
+	return rc.c.GetCollection(ctx, rc.rocksetWorkspace, rc.rocksetCollection)
 }
 
 func (rc *CollectionCreator) DeleteSource(ctx context.Context, id string) error {
-	req := rc.c.SourcesApi.DeleteSource(ctx, rc.conf.Workspace, rc.conf.CollectionName, id)
+	req := rc.c.SourcesApi.DeleteSource(ctx, rc.rocksetWorkspace, rc.rocksetCollection, id)
 	_, _, err := rc.c.SourcesApi.DeleteSourceExecute(req)
 	return err
 }
@@ -127,7 +141,7 @@ func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*open
 		body[k] = v
 	}
 
-	body["name"] = rc.conf.CollectionName
+	body["name"] = rc.rocksetCollection
 	body["sources"] = []map[string]interface{}{{
 		"integration_name": rc.conf.S3.Integration,
 		"format_params":    map[string]interface{}{"bson": true},
@@ -137,7 +151,7 @@ func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*open
 		},
 	}}
 
-	path := fmt.Sprintf("/v1/orgs/self/ws/%s/collections", rc.conf.Workspace)
+	path := fmt.Sprintf("/v1/orgs/self/ws/%s/collections", rc.rocksetWorkspace)
 
 	log.Logvf(log.Always, "creating with body %+v", body)
 	req, err := rc.raw.PreparePostRequest(ctx, path, body)
@@ -166,7 +180,7 @@ func (rc *CollectionCreator) AddMongoSource(ctx context.Context) (*openapi.GetSo
 		},
 	}
 
-	path := fmt.Sprintf("/v1/orgs/self/ws/%s/collections/%s/sources", rc.conf.Workspace, rc.conf.CollectionName)
+	path := fmt.Sprintf("/v1/orgs/self/ws/%s/collections/%s/sources", rc.rocksetWorkspace, rc.rocksetCollection)
 
 	req, err := rc.raw.PreparePostRequest(ctx, path, body)
 	if err != nil {

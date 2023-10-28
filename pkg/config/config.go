@@ -33,8 +33,7 @@ type Config struct {
 
 	Mongo MongoConfig `yaml:"mongo"`
 
-	Workspace               string                 `yaml:"workspace"`
-	CollectionName          string                 `yaml:"collection"`
+	RocksetCollection       string                 `yaml:"rockset_collection"`
 	CreateCollectionRequest map[string]interface{} `yaml:"create_collection_request"`
 }
 
