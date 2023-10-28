@@ -100,7 +100,7 @@ func (dump *MongoDump) dumpCollection(ctx context.Context, writer io.Writer, dum
 				" inconsistent dump results, error was: %v", err)
 	} else if isMMAPV1 {
 		log.Logvf(log.DebugHigh, "running with MMAP, setting _id hint")
-		query.Hint = bson.D{{"_id", 1}}
+		query.Hint = bson.D{{Key: "_id", Value: 1}}
 	}
 
 	dumpCount, err := dump.dumpValidatedQuery(ctx, query, writer, dumpProgressor)
