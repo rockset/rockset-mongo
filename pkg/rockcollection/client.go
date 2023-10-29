@@ -16,8 +16,7 @@ type CollectionCreator struct {
 	c   *rockset.RockClient
 	raw *rockhttp.RocksetRawClient
 
-	conf  *config.Config
-	state *config.State
+	conf *config.Config
 
 	rocksetWorkspace  string
 	rocksetCollection string
@@ -29,6 +28,7 @@ const (
 	DOESNOT_EXIST CollectionState = iota
 	INITIAL_LOAD_IN_PROGRESS
 	INITIAL_LOAD_DONE
+	BULK_INGEST
 	STREAMING_WITH_S3
 	STREAMING
 )
@@ -50,7 +50,7 @@ func (s CollectionState) String() string {
 	}
 }
 
-func NewClient(conf *config.Config, state *config.State) (*CollectionCreator, error) {
+func NewClient(conf *config.Config) (*CollectionCreator, error) {
 	rc, err := rockset.NewClient(func(rc *rockset.RockConfig) {
 		// environment variables overide config
 		if rc.APIKey == "" {
@@ -70,7 +70,6 @@ func NewClient(conf *config.Config, state *config.State) (*CollectionCreator, er
 		c:                 rc,
 		raw:               rockhttp.NewRocksetRawClient(rc),
 		conf:              conf,
-		state:             state,
 		rocksetWorkspace:  workspace,
 		rocksetCollection: collection,
 	}
@@ -135,7 +134,7 @@ func (rc *CollectionCreator) DeleteSource(ctx context.Context, id string) error 
 	return err
 }
 
-func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*openapi.Collection, error) {
+func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context, exportInfo *config.ExportInfo) (*openapi.Collection, error) {
 	body := map[string]interface{}{}
 	for k, v := range rc.conf.CreateCollectionRequest {
 		body[k] = v
@@ -146,8 +145,8 @@ func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*open
 		"integration_name": rc.conf.S3.Integration,
 		"format_params":    map[string]interface{}{"bson": true},
 		"s3": map[string]interface{}{
-			"bucket": rc.state.ExportInfo.Bucket,
-			"prefix": rc.state.ExportInfo.Prefix,
+			"bucket": exportInfo.Bucket,
+			"prefix": exportInfo.Prefix,
 		},
 	}}
 
@@ -168,7 +167,7 @@ func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context) (*open
 	return &resp, nil
 }
 
-func (rc *CollectionCreator) AddMongoSource(ctx context.Context) (*openapi.GetSourceResponse, error) {
+func (rc *CollectionCreator) AddMongoSource(ctx context.Context, resumeToken string) (*openapi.GetSourceResponse, error) {
 	hasTransformation := hasTransformation(rc.conf.CreateCollectionRequest)
 	body := map[string]interface{}{
 		"integration_name": rc.conf.Mongo.Integration,
@@ -176,7 +175,7 @@ func (rc *CollectionCreator) AddMongoSource(ctx context.Context) (*openapi.GetSo
 			"database_name":          rc.conf.Mongo.DB,
 			"collection_name":        rc.conf.Mongo.Collection,
 			"retrieve_full_document": hasTransformation,
-			"initial_resume_token":   rc.state.MongoDBCollectionInfo.ResumeToken,
+			"initial_resume_token":   resumeToken,
 		},
 	}
 

@@ -29,6 +29,9 @@ func (d *Driver) preflight(ctx context.Context) error {
 	if d.config.RocksetCollection == "" {
 		return fmt.Errorf("missing rockset `collection`")
 	}
+
+	// check permissions
+
 	return nil
 }
 
@@ -41,7 +44,7 @@ func (d *Driver) prepare(ctx context.Context) error {
 		d.config.Mongo.Collection = d.dumpOpts.Collection
 	}
 
-	creator, err := rockcollection.NewClient(d.config, d.state)
+	creator, err := rockcollection.NewClient(d.config)
 	if err != nil {
 		return fmt.Errorf("failed to create rockset api client: %w", err)
 	}
@@ -127,7 +130,7 @@ func (d *Driver) bucketAndPrefix(uri string) (string, string) {
 }
 
 func (d *Driver) createCollection(ctx context.Context) error {
-	_, err := d.creator.CreateInitialCollection(ctx)
+	_, err := d.creator.CreateInitialCollection(ctx, d.state.ExportInfo)
 	return err
 }
 
@@ -153,8 +156,27 @@ func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
 	return fmt.Errorf("timed out before collection is ready: %w", ctx.Err())
 }
 
+func (d *Driver) waitUntilReady(ctx context.Context) error {
+	for ctx.Err() == nil {
+		coll, err := d.creator.GetCollection(ctx)
+		if err != nil && !strings.Contains(err.Error(), "does not exist in") {
+			return fmt.Errorf("failed to get collection info: %w", err)
+		}
+
+		if coll.Status != nil && strings.ToLower(*coll.status) == "ready" {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return fmt.Errorf("timed out before collection is ready: %w", ctx.Err())
+}
+
 func (d *Driver) createMongoDbSource(ctx context.Context) error {
-	_, err := d.creator.AddMongoSource(ctx)
+	_, err := d.creator.AddMongoSource(ctx, d.state.MongoDBCollectionInfo.ResumeToken)
 	return err
 }
 
@@ -233,6 +255,11 @@ func (d *Driver) run(ctx context.Context) error {
 	}
 	if collState <= rockcollection.INITIAL_LOAD_DONE {
 		if err := d.createMongoDbSource(ctx); err != nil {
+			return fmt.Errorf("failed to wait for collection to be ready: %w", err)
+		}
+	}
+	if collState <= rockcollection.STREAMING_WITH_S3 {
+		if err := d.waitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed to wait for collection to be ready: %w", err)
 		}
 		if err := d.deleteS3Source(ctx); err != nil {
