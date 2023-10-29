@@ -40,6 +40,10 @@ func (d *Driver) preflight(ctx context.Context) error {
 		return err
 	}
 
+	if err := d.checkRocksetAccess(ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -47,9 +51,13 @@ func (d *Driver) prepare(ctx context.Context) error {
 	d.config.Mongo.TargetChunkSizeMB = 250
 	if d.dumpOpts.DB != "" {
 		d.config.Mongo.DB = d.dumpOpts.DB
+	} else {
+		d.dumpOpts.DB = d.config.Mongo.DB
 	}
 	if d.dumpOpts.Collection != "" {
 		d.config.Mongo.Collection = d.dumpOpts.Collection
+	} else {
+		d.dumpOpts.Collection = d.config.Mongo.Collection
 	}
 
 	creator, err := rockcollection.NewClient(d.config)
@@ -84,8 +92,17 @@ func (d *Driver) checkS3Access(ctx context.Context) error {
 	if err == nil {
 		return fmt.Errorf("found key unexpectedly; ensure that S3 path is empty: key=%v", key)
 	} else if !errors.As(err, &errNotFound) {
-		return fmt.Errorf("lacking S3 permissions:  %w", err)
+		return fmt.Errorf("failed to query S3:  %w", err)
 	}
+	return nil
+}
+
+func (d *Driver) checkRocksetAccess(ctx context.Context) error {
+	_, err := d.creator.GetCollection(ctx)
+	if err != nil && !strings.Contains(err.Error(), "does not exist in") {
+		return fmt.Errorf("failed to query Rockset: %w", err)
+	}
+
 	return nil
 }
 
@@ -247,12 +264,12 @@ func (d *Driver) persistState() {
 }
 
 func (d *Driver) run(ctx context.Context) error {
-	if err := d.preflight(ctx); err != nil {
-		return fmt.Errorf("failed preflight checks: %w", err)
-
-	}
 	if err := d.prepare(ctx); err != nil {
 		return fmt.Errorf("failed prepare checks: %w", err)
+	}
+
+	if err := d.preflight(ctx); err != nil {
+		return fmt.Errorf("failed preflight checks: %w", err)
 	}
 
 	log.Logvf(log.Always, "exporting MongoDB data")
