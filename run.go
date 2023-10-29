@@ -2,11 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/google/uuid"
 	"github.com/mongodb/mongo-tools/common/log"
 	"github.com/mongodb/mongo-tools/common/options"
@@ -30,7 +35,10 @@ func (d *Driver) preflight(ctx context.Context) error {
 		return fmt.Errorf("missing rockset `collection`")
 	}
 
-	// check permissions
+	// check permissions to S3
+	if err := d.checkS3Access(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -49,6 +57,35 @@ func (d *Driver) prepare(ctx context.Context) error {
 		return fmt.Errorf("failed to create rockset api client: %w", err)
 	}
 	d.creator = creator
+	return nil
+}
+
+func (d *Driver) checkS3Access(ctx context.Context) error {
+	cfg, err := awsConfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	uri, err := url.ParseRequestURI(d.config.S3.Uri)
+	if err != nil {
+		return fmt.Errorf("invalid S3 path %v: %w", d.config.S3.Uri, err)
+	}
+	if uri.Scheme != "s3" {
+		return fmt.Errorf("path is not s3: %s", d.config.S3.Uri)
+	}
+
+	key := strings.Trim(uri.Path, "/") + "/" + uuid.NewString()
+	s3Client := s3.NewFromConfig(cfg)
+	_, err = s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(uri.Host),
+		Key:    aws.String(key),
+	})
+	var errNotFound *types.NotFound
+	if err == nil {
+		return fmt.Errorf("found key unexpectedly; ensure that S3 path is empty: key=%v", key)
+	} else if !errors.As(err, &errNotFound) {
+		return fmt.Errorf("lacking S3 permissions:  %w", err)
+	}
 	return nil
 }
 
@@ -163,7 +200,7 @@ func (d *Driver) waitUntilReady(ctx context.Context) error {
 			return fmt.Errorf("failed to get collection info: %w", err)
 		}
 
-		if coll.Status != nil && strings.ToLower(*coll.status) == "ready" {
+		if coll.Status != nil && strings.ToUpper(*coll.Status) == "READY" {
 			return nil
 		}
 

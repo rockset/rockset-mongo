@@ -182,7 +182,7 @@ func (dump *MongoDump) dumpValidatedIterToWriter(
 	return termErr
 }
 
-func (dump *MongoDump) CollectionInfo(ctx context.Context) (*config.CollectionInfo, error) {
+func (dump *MongoDump) CollectionInfo(ctx context.Context) (*config.MongoDBCollectionInfo, error) {
 	stream, err := dump.collection.Watch(ctx, mongo.Pipeline{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to read changelog stream: %w", err)
@@ -204,7 +204,7 @@ func (dump *MongoDump) CollectionInfo(ctx context.Context) (*config.CollectionIn
 		return nil, fmt.Errorf("error decoding collStats: %w", err)
 	}
 
-	info := &config.CollectionInfo{
+	info := &config.MongoDBCollectionInfo{
 		Documents:   toUint64(stats["count"]),
 		Size:        toUint64(stats["size"]),
 		ResumeToken: stream.ResumeToken().String(),
