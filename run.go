@@ -16,6 +16,7 @@ import (
 	"github.com/mongodb/mongo-tools/common/log"
 	"github.com/mongodb/mongo-tools/common/options"
 	"github.com/mongodb/mongo-tools/common/progress"
+	"github.com/rockset/rockset-go-client/openapi"
 	"github.com/rockset/rockset-mongo/pkg/config"
 	"github.com/rockset/rockset-mongo/pkg/mongo"
 	"github.com/rockset/rockset-mongo/pkg/rockcollection"
@@ -27,7 +28,8 @@ type Driver struct {
 	state    *config.State
 	dumpOpts options.ToolOptions
 
-	creator *rockcollection.CollectionCreator
+	creator    *rockcollection.CollectionCreator
+	collection *openapi.Collection
 }
 
 func (d *Driver) preflight(ctx context.Context) error {
@@ -269,6 +271,21 @@ func (d *Driver) persistState() {
 	}
 }
 
+func (d *Driver) getCollection(ctx context.Context) (*openapi.Collection, error) {
+	coll, err := d.creator.GetCollection(ctx)
+	if err != nil {
+		if !strings.Contains(err.Error(), "does not exist in") {
+			return nil, fmt.Errorf("failed to get collection info: %w", err)
+		}
+		d.collection = nil
+		return nil, nil
+	}
+
+	d.collection = &coll
+	return &coll, err
+
+}
+
 func (d *Driver) run(ctx context.Context) error {
 	if err := d.prepare(ctx); err != nil {
 		return fmt.Errorf("failed prepare checks: %w", err)
@@ -289,17 +306,13 @@ func (d *Driver) run(ctx context.Context) error {
 	d.persistState()
 
 	log.Logvf(log.Always, "creating collection %v", d.config.RocksetCollection)
-	// if err := d.createCollection(ctx); err != nil {
-	// 	return fmt.Errorf("failed to create collection: %w", err)
-	// }
-	d.persistState()
 
-	coll, err := d.creator.GetCollection(ctx)
+	coll, err := d.getCollection(ctx)
 	if err != nil && !strings.Contains(err.Error(), "does not exist in") {
 		return fmt.Errorf("failed to get collection info: %w", err)
 	}
 
-	collState, _ := d.creator.CollectionState(&coll)
+	collState, _ := d.creator.CollectionState(coll)
 	log.Logvf(log.Always, "collection state: %v", collState)
 	if collState <= rockcollection.DOESNOT_EXIST {
 		if err := d.createCollection(ctx); err != nil {

@@ -28,7 +28,6 @@ const (
 	DOESNOT_EXIST CollectionState = iota
 	INITIAL_LOAD_IN_PROGRESS
 	INITIAL_LOAD_DONE
-	BULK_INGEST
 	STREAMING_WITH_S3
 	STREAMING
 )
@@ -43,8 +42,6 @@ func (s CollectionState) String() string {
 		return "INITIAL_LOAD_DONE"
 	case STREAMING_WITH_S3:
 		return "STREAMING_WITH_S3"
-	case STREAMING:
-		return "STREAMING"
 	default:
 		return fmt.Sprintf("%d", s)
 	}
