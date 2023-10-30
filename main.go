@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mongodb/mongo-tools/common/log"
 	"github.com/mongodb/mongo-tools/common/progress"
 	"github.com/mongodb/mongo-tools/common/signals"
@@ -79,10 +82,32 @@ func run(args []string) {
 		logLevel: log.Always,
 	}
 
-	if err := d.run(ctx); err != nil {
+	var p *tea.Program
+	if true {
+		d.tui = true
+		d.logLevel = log.DebugLow
+
+		p = tea.NewProgram(&model{d})
+	}
+
+	var done sync.WaitGroup
+	done.Add(1)
+	go func() {
+		defer done.Done()
+		if err := d.run(ctx); err != nil {
+			log.Logvf(log.Always, "error: %v", err)
+			os.Exit(util.ExitFailure)
+		}
+		p.Quit()
+	}()
+
+	if _, err := p.Run(); err != nil {
 		log.Logvf(log.Always, "error: %v", err)
 		os.Exit(util.ExitFailure)
 	}
+	cancelFn()
+	done.Wait()
+	fmt.Println("Collection created and import is done")
 }
 
 func export(args []string) {

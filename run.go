@@ -364,9 +364,7 @@ func (d *Driver) stateString() string {
 		s.WriteString(fmt.Sprintf(" Docs: %v    Size: %v\n", humanize.Comma(int64(d.state.MongoDBCollectionInfo.Documents)),
 			humanize.Bytes(d.state.MongoDBCollectionInfo.Size)))
 	}
-	if d.finishedExport() {
-		s.WriteString("  Export done\n")
-	} else if d.exportWriter != nil {
+	if !d.finishedExport() && d.exportWriter != nil {
 		stats := d.exportWriter.Stats()
 		docs := atomic.LoadUint64(&stats.Docs)
 		perc := float64(atomic.LoadUint64(&stats.Docs)) / float64(d.state.MongoDBCollectionInfo.Documents)
@@ -378,35 +376,39 @@ func (d *Driver) stateString() string {
 		s.WriteString("  " + humanize.Comma(int64(docs)) + " / " + humanize.Comma(int64(d.state.MongoDBCollectionInfo.Documents)) + "\n")
 	}
 
-	s.WriteString("\n")
-	s.WriteString("### Creating Rockset collection ")
-	s.WriteString(d.config.RocksetCollection)
-	s.WriteString("\n")
+	if d.finishedExport() {
+		s.WriteString("  Export done\n")
+		s.WriteString("\n")
+		s.WriteString("### Creating Rockset collection ")
+		s.WriteString(d.config.RocksetCollection)
+		s.WriteString("\n")
 
-	coll := d.collection
-	if coll == nil {
-		s.WriteString(" Creating collection")
-	} else {
-		s.WriteString(" Status: " + *coll.Status)
+		coll := d.collection
+		if coll == nil {
+			s.WriteString(" Creating collection")
+		} else {
+			s.WriteString(" Status: " + *coll.Status)
 
-		var s3 *openapi.Source
-		for _, cs := range coll.Sources {
-			if cs.S3 != nil {
-				s3 = &cs
+			var s3 *openapi.Source
+			for _, cs := range coll.Sources {
+				if cs.S3 != nil {
+					s3 = &cs
+				}
 			}
-		}
 
-		if s3 != nil && s3.S3.ObjectCountDownloaded != nil && s3.S3.ObjectCountTotal != nil {
-			downloaded := *s3.S3.ObjectCountDownloaded
-			total := *s3.S3.ObjectCountTotal
+			if s3 != nil && s3.S3.ObjectCountDownloaded != nil && s3.S3.ObjectCountTotal != nil {
+				downloaded := *s3.S3.ObjectCountDownloaded
+				total := *s3.S3.ObjectCountTotal
 
-			s.WriteString("Processing S3 objects\n")
-			prog := bprogress.New(bprogress.WithScaledGradient("#FF7CCB", "#FDFF8C"))
-			s.WriteString(prog.ViewAs(1.0 * float64(downloaded) / float64(total)))
-			s.WriteString(fmt.Sprintf("  %v / %v\n",
-				humanize.Comma(downloaded), humanize.Comma(total)))
+				s.WriteString("Processing S3 objects\n")
+				prog := bprogress.New(bprogress.WithScaledGradient("#FF7CCB", "#FDFF8C"))
+				s.WriteString(prog.ViewAs(1.0 * float64(downloaded) / float64(total)))
+				s.WriteString(fmt.Sprintf("  %v / %v\n",
+					humanize.Comma(downloaded), humanize.Comma(total)))
+			}
 		}
 	}
 
+	s.WriteString("\n\n")
 	return s.String()
 }
