@@ -216,8 +216,14 @@ func (d *Driver) waitUntilReady(ctx context.Context) error {
 		if err != nil && !strings.Contains(err.Error(), "does not exist in") {
 			return fmt.Errorf("failed to get collection info: %w", err)
 		}
+		status := ""
+		if coll.Status != nil {
+			status = strings.ToUpper(*coll.Status)
 
-		if coll.Status != nil && strings.ToUpper(*coll.Status) == "READY" {
+		}
+		log.Logvf(log.Always, "collection state: %v", status)
+
+		if status == "READY" {
 			return nil
 		}
 
