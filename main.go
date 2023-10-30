@@ -74,6 +74,9 @@ func run(args []string) {
 		config:   conf,
 		state:    state,
 		dumpOpts: *opts.ToolOptions,
+
+		tui:      false,
+		logLevel: log.Always,
 	}
 
 	if err := d.run(ctx); err != nil {

@@ -34,6 +34,9 @@ type Driver struct {
 	creator      *rockcollection.CollectionCreator
 	collection   *openapi.Collection
 	exportWriter writers.OutputWriter
+
+	tui      bool
+	logLevel int
 }
 
 func (d *Driver) preflight(ctx context.Context) error {
@@ -121,7 +124,7 @@ func (d *Driver) export(ctx context.Context) error {
 	var err error
 	export := d.state.ExportInfo
 	if export != nil && export.EndTime.IsZero() && !export.StartTime.IsZero() {
-		log.Logvf(log.Always, "found a partial export, regenerating a new one")
+		log.Logvf(d.logLevel, "found a partial export, regenerating a new one")
 		d.state.ID = uuid.New()
 	}
 
@@ -166,7 +169,7 @@ func (d *Driver) export(ctx context.Context) error {
 		defer dump.ProgressManager.Detach(dbNamespace)
 	}
 
-	log.Logvf(log.Always, "Started export")
+	log.Logvf(d.logLevel, "Started export")
 	if err = dump.Dump(ctx, d.exportWriter, dumpProgressor); err != nil {
 		return fmt.Errorf("failed to export data: %w", err)
 	}
@@ -203,7 +206,7 @@ func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
 		}
 
 		collState, _ := d.creator.CollectionState(&coll)
-		log.Logvf(log.Always, "collection state: %v", collState)
+		log.Logvf(d.logLevel, "collection state: %v", collState)
 
 		if collState >= rockcollection.INITIAL_LOAD_DONE {
 			return nil
@@ -228,7 +231,7 @@ func (d *Driver) waitUntilReady(ctx context.Context) error {
 			status = strings.ToUpper(*coll.Status)
 
 		}
-		log.Logvf(log.Always, "collection state: %v", status)
+		log.Logvf(d.logLevel, "collection state: %v", status)
 
 		if status == "READY" {
 			return nil
@@ -261,11 +264,11 @@ func (d *Driver) deleteS3Source(ctx context.Context) error {
 	}
 
 	if sourceId == "" {
-		log.Logvf(log.Always, "S3 source was deleted already")
+		log.Logvf(d.logLevel, "S3 source was deleted already")
 		return nil
 	}
 
-	log.Logvf(log.Always, "Deleting S3 source %v", sourceId)
+	log.Logvf(d.logLevel, "Deleting S3 source %v", sourceId)
 	return d.creator.DeleteSource(ctx, sourceId)
 }
 
@@ -300,9 +303,9 @@ func (d *Driver) run(ctx context.Context) error {
 		return fmt.Errorf("failed preflight checks: %w", err)
 	}
 
-	log.Logvf(log.Always, "exporting MongoDB data")
+	log.Logvf(d.logLevel, "exporting MongoDB data")
 	if d.finishedExport() {
-		log.Logvf(log.Always, "export is already done")
+		log.Logvf(d.logLevel, "export is already done")
 	} else {
 		if err := d.export(ctx); err != nil {
 			return fmt.Errorf("failed to export data: %w", err)
@@ -310,7 +313,7 @@ func (d *Driver) run(ctx context.Context) error {
 	}
 	d.persistState()
 
-	log.Logvf(log.Always, "creating collection %v", d.config.RocksetCollection)
+	log.Logvf(d.logLevel, "creating collection %v", d.config.RocksetCollection)
 
 	coll, err := d.getCollection(ctx)
 	if err != nil && !strings.Contains(err.Error(), "does not exist in") {
@@ -318,7 +321,7 @@ func (d *Driver) run(ctx context.Context) error {
 	}
 
 	collState, _ := d.creator.CollectionState(coll)
-	log.Logvf(log.Always, "collection state: %v", collState)
+	log.Logvf(d.logLevel, "collection state: %v", collState)
 	if collState <= rockcollection.DOESNOT_EXIST {
 		if err := d.createCollection(ctx); err != nil {
 			return fmt.Errorf("failed to create collection: %w", err)
