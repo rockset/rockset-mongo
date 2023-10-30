@@ -114,13 +114,8 @@ func export(args []string) {
 	// verify uri options and log them
 	opts.URI.LogUnsupportedOptions()
 
-	progressManager := progress.NewBarWriter(log.Writer(0), progressBarWaitTime, progressBarLength, false)
-	progressManager.Start()
-	defer progressManager.Stop()
-
 	dump := mongo.MongoDump{
-		ToolOptions:     opts.ToolOptions,
-		ProgressManager: progressManager,
+		ToolOptions: opts.ToolOptions,
 	}
 
 	if err = dump.Init(); err != nil {
@@ -145,11 +140,15 @@ func export(args []string) {
 		os.Exit(util.ExitFailure)
 	}
 
+	progressManager := progress.NewBarWriter(log.Writer(0), progressBarWaitTime, progressBarLength, false)
+	progressManager.Start()
+	defer progressManager.Stop()
+
 	dumpProgressor := progress.NewCounter(int64(info.Documents))
 	dbNamespace := opts.DB + "." + opts.Collection
-	if dump.ProgressManager != nil {
-		dump.ProgressManager.Attach(dbNamespace, dumpProgressor)
-		defer dump.ProgressManager.Detach(dbNamespace)
+	if progressManager != nil {
+		progressManager.Attach(dbNamespace, dumpProgressor)
+		defer progressManager.Detach(dbNamespace)
 	}
 
 	dump.CollectionInfo(ctx)

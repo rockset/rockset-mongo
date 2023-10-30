@@ -120,6 +120,19 @@ func (d *Driver) finishedExport() bool {
 	return export != nil && !export.EndTime.IsZero()
 }
 
+func (d *Driver) progressor(totalDocuments uint64, dbNamespace string) (progress.Updateable, func()) {
+	progressManager := progress.NewBarWriter(log.Writer(0), progressBarWaitTime, progressBarLength, false)
+	progressManager.Start()
+
+	dumpProgressor := progress.NewCounter(int64(totalDocuments))
+	progressManager.Attach(dbNamespace, dumpProgressor)
+
+	return dumpProgressor, func() {
+		progressManager.Detach(dbNamespace)
+		progressManager.Stop()
+	}
+}
+
 func (d *Driver) export(ctx context.Context) error {
 	var err error
 	export := d.state.ExportInfo
@@ -132,13 +145,8 @@ func (d *Driver) export(ctx context.Context) error {
 		StartTime: time.Now(),
 	}
 
-	progressManager := progress.NewBarWriter(log.Writer(0), progressBarWaitTime, progressBarLength, false)
-	progressManager.Start()
-	defer progressManager.Stop()
-
 	dump := mongo.MongoDump{
-		ToolOptions:     &d.dumpOpts,
-		ProgressManager: progressManager,
+		ToolOptions: &d.dumpOpts,
 	}
 
 	if err := dump.Init(); err != nil {
@@ -162,15 +170,12 @@ func (d *Driver) export(ctx context.Context) error {
 	}
 	d.state.MongoDBCollectionInfo = info
 
-	dumpProgressor := progress.NewCounter(int64(info.Documents))
 	dbNamespace := d.dumpOpts.DB + "." + d.dumpOpts.Collection
-	if dump.ProgressManager != nil {
-		dump.ProgressManager.Attach(dbNamespace, dumpProgressor)
-		defer dump.ProgressManager.Detach(dbNamespace)
-	}
+	progressor, progressCleanup := d.progressor(info.Documents, dbNamespace)
+	defer progressCleanup()
 
-	log.Logvf(d.logLevel, "Started export")
-	if err = dump.Dump(ctx, d.exportWriter, dumpProgressor); err != nil {
+	log.Logvf(d.logLevel, "Started export to %v", s3Uri)
+	if err = dump.Dump(ctx, d.exportWriter, progressor); err != nil {
 		return fmt.Errorf("failed to export data: %w", err)
 	}
 
@@ -303,7 +308,6 @@ func (d *Driver) run(ctx context.Context) error {
 		return fmt.Errorf("failed preflight checks: %w", err)
 	}
 
-	log.Logvf(d.logLevel, "exporting MongoDB data")
 	if d.finishedExport() {
 		log.Logvf(d.logLevel, "export is already done")
 	} else {
@@ -405,12 +409,4 @@ func (d *Driver) stateString() string {
 	}
 
 	return s.String()
-}
-
-func formatInt(v *int64) string {
-	if v == nil {
-		return "unknown"
-	}
-
-	return humanize.Comma(*v)
 }

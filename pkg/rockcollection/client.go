@@ -42,6 +42,8 @@ func (s CollectionState) String() string {
 		return "INITIAL_LOAD_DONE"
 	case STREAMING_WITH_S3:
 		return "STREAMING_WITH_S3"
+	case STREAMING:
+		return "STREAMING"
 	default:
 		return fmt.Sprintf("%d", s)
 	}

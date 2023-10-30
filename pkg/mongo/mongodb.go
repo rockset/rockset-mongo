@@ -20,7 +20,6 @@ type MongoDump struct {
 	ToolOptions *options.ToolOptions
 	// InputOptions *InputOptions
 
-	ProgressManager progress.Manager
 	SessionProvider *db.SessionProvider
 
 	isMongos     bool
