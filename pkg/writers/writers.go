@@ -17,9 +17,9 @@ type WriterOptions struct {
 }
 
 type Stats struct {
-	docs  uint64
-	bytes uint64
-	files uint64
+	Docs  uint64
+	Bytes uint64
+	Files uint64
 }
 
 type OutputWriter interface {
@@ -48,15 +48,15 @@ type streamWrapper struct {
 func NewStreamWrapper(writer io.Writer) *streamWrapper {
 	return &streamWrapper{
 		writer: writer,
-		stats:  Stats{files: 1},
+		stats:  Stats{Files: 1},
 	}
 }
 
 // Close implements io.WriteCloser.
 func (w *streamWrapper) Write(p []byte) (int, error) {
 	n, err := w.writer.Write(p)
-	atomic.AddUint64(&w.stats.docs, 1)
-	atomic.AddUint64(&w.stats.bytes, uint64(n))
+	atomic.AddUint64(&w.stats.Docs, 1)
+	atomic.AddUint64(&w.stats.Bytes, uint64(n))
 	return n, err
 }
 
@@ -134,8 +134,8 @@ func (w *DirectoryWriter) Write(p []byte) (int, error) {
 	}
 
 	n, err := w.f.Write(p)
-	atomic.AddUint64(&w.stats.docs, 1)
-	atomic.AddUint64(&w.stats.bytes, uint64(n))
+	atomic.AddUint64(&w.stats.Docs, 1)
+	atomic.AddUint64(&w.stats.Bytes, uint64(n))
 	atomic.AddUint64(&w.writtenBytes, uint64(n))
 	return n, err
 }
@@ -158,7 +158,7 @@ func (w *DirectoryWriter) maybeRotate() error {
 		return fmt.Errorf("failed to create new file: %w", err)
 	}
 	w.writtenBytes = 0
-	w.stats.files++
+	atomic.AddUint64(&w.stats.Files, 1)
 
 	return nil
 }

@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go/aws"
+	bprogress "github.com/charmbracelet/bubbles/progress"
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/mongodb/mongo-tools/common/log"
 	"github.com/mongodb/mongo-tools/common/options"
@@ -28,8 +31,9 @@ type Driver struct {
 	state    *config.State
 	dumpOpts options.ToolOptions
 
-	creator    *rockcollection.CollectionCreator
-	collection *openapi.Collection
+	creator      *rockcollection.CollectionCreator
+	collection   *openapi.Collection
+	exportWriter writers.OutputWriter
 }
 
 func (d *Driver) preflight(ctx context.Context) error {
@@ -114,6 +118,7 @@ func (d *Driver) finishedExport() bool {
 }
 
 func (d *Driver) export(ctx context.Context) error {
+	var err error
 	export := d.state.ExportInfo
 	if export != nil && export.EndTime.IsZero() && !export.StartTime.IsZero() {
 		log.Logvf(log.Always, "found a partial export, regenerating a new one")
@@ -138,7 +143,7 @@ func (d *Driver) export(ctx context.Context) error {
 	}
 
 	s3Uri := strings.TrimRight(d.config.S3.Uri, "/") + "/" + d.state.ID.String()
-	out, err := writers.NewWriter(ctx, &writers.WriterOptions{
+	d.exportWriter, err = writers.NewWriter(ctx, &writers.WriterOptions{
 		Out:             s3Uri,
 		TargetChunkSize: d.config.Mongo.TargetChunkSizeMB * 1024 * 1024,
 		FilePrefix:      d.config.Mongo.DB + "." + d.config.Mongo.Collection,
@@ -146,7 +151,7 @@ func (d *Driver) export(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create writer: %w", err)
 	}
-	defer out.Close()
+	defer d.exportWriter.Close()
 
 	info, err := dump.CollectionInfo(ctx)
 	if err != nil {
@@ -162,7 +167,7 @@ func (d *Driver) export(ctx context.Context) error {
 	}
 
 	log.Logvf(log.Always, "Started export")
-	if err = dump.Dump(ctx, out, dumpProgressor); err != nil {
+	if err = dump.Dump(ctx, d.exportWriter, dumpProgressor); err != nil {
 		return fmt.Errorf("failed to export data: %w", err)
 	}
 
@@ -342,4 +347,67 @@ func (d *Driver) run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (d *Driver) stateString() string {
+	var s strings.Builder
+
+	s.WriteString("### Exporting MongoDB Collection\n")
+	if d.state != nil && d.state.MongoDBCollectionInfo != nil {
+		s.WriteString(fmt.Sprintf(" Docs: %v    Size: %v\n", humanize.Comma(int64(d.state.MongoDBCollectionInfo.Documents)),
+			humanize.Bytes(d.state.MongoDBCollectionInfo.Size)))
+	}
+	if d.finishedExport() {
+		s.WriteString("  Export done\n")
+	} else if d.exportWriter != nil {
+		stats := d.exportWriter.Stats()
+		docs := atomic.LoadUint64(&stats.Docs)
+		perc := float64(atomic.LoadUint64(&stats.Docs)) / float64(d.state.MongoDBCollectionInfo.Documents)
+		if perc > 1 {
+			perc = 1
+		}
+		prog := bprogress.New(bprogress.WithScaledGradient("#FF7CCB", "#FDFF8C"))
+		s.WriteString(prog.ViewAs(perc))
+		s.WriteString("  " + humanize.Comma(int64(docs)) + " / " + humanize.Comma(int64(d.state.MongoDBCollectionInfo.Documents)) + "\n")
+	}
+
+	s.WriteString("\n")
+	s.WriteString("### Creating Rockset collection ")
+	s.WriteString(d.config.RocksetCollection)
+	s.WriteString("\n")
+
+	coll := d.collection
+	if coll == nil {
+		s.WriteString(" Creating collection")
+	} else {
+		s.WriteString(" Status: " + *coll.Status)
+
+		var s3 *openapi.Source
+		for _, cs := range coll.Sources {
+			if cs.S3 != nil {
+				s3 = &cs
+			}
+		}
+
+		if s3 != nil && s3.S3.ObjectCountDownloaded != nil && s3.S3.ObjectCountTotal != nil {
+			downloaded := *s3.S3.ObjectCountDownloaded
+			total := *s3.S3.ObjectCountTotal
+
+			s.WriteString("Processing S3 objects\n")
+			prog := bprogress.New(bprogress.WithScaledGradient("#FF7CCB", "#FDFF8C"))
+			s.WriteString(prog.ViewAs(1.0 * float64(downloaded) / float64(total)))
+			s.WriteString(fmt.Sprintf("  %v / %v\n",
+				humanize.Comma(downloaded), humanize.Comma(total)))
+		}
+	}
+
+	return s.String()
+}
+
+func formatInt(v *int64) string {
+	if v == nil {
+		return "unknown"
+	}
+
+	return humanize.Comma(*v)
 }
