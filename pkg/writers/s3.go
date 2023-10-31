@@ -61,7 +61,7 @@ func NewS3Writer(ctx context.Context, opts *WriterOptions) (*S3Writer, error) {
 		s3Client: s3Client,
 		uploader: manager.NewUploader(s3Client),
 	}
-	w.fs, err = NewDirectoryWriter("s3buffer", opts)
+	w.fs, err = NewDirectoryWriter(filepath.Join("s3buffer", opts.ExportID), opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create local dir: %w", err)
 	}
@@ -75,7 +75,11 @@ func (w *S3Writer) Close() error {
 	}
 
 	w.uploadWg.Wait()
-	return w.uploadError()
+	if err := w.uploadError(); err != nil {
+		return fmt.Errorf("failed to upload: %w", err)
+	}
+
+	return os.RemoveAll(w.fs.dirPath)
 }
 
 func (w *S3Writer) Write(p []byte) (int, error) {

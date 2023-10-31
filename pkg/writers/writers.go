@@ -14,6 +14,8 @@ type WriterOptions struct {
 	Out             string
 	TargetChunkSize uint64
 	FilePrefix      string
+
+	ExportID string
 }
 
 type Stats struct {
@@ -104,9 +106,14 @@ func NewDirectoryWriter(out string, opts *WriterOptions) (*DirectoryWriter, erro
 
 // Close implements io.WriteCloser.
 func (w *DirectoryWriter) Close() error {
+	if w.f == nil {
+		return nil
+	}
+
 	if err := w.closeFile(w.f); err != nil {
 		return err
 	}
+	w.f = nil
 	return nil
 }
 
