@@ -179,9 +179,18 @@ func (d *Driver) export(ctx context.Context) error {
 		return fmt.Errorf("failed to export data: %w", err)
 	}
 
+	if err := d.exportWriter.Close(); err != nil {
+		return fmt.Errorf("failed to close writer: %w", err)
+	}
+
 	d.state.ExportInfo.EndTime = time.Now()
 	d.state.ExportInfo.Bucket, d.state.ExportInfo.Prefix =
 		d.bucketAndPrefix(s3Uri)
+
+	stats := d.exportWriter.Stats()
+	d.state.ExportInfo.Bytes = stats.Bytes
+	d.state.ExportInfo.Documents = stats.Docs
+	d.state.ExportInfo.Files = stats.Files
 
 	return nil
 }
@@ -378,6 +387,9 @@ func (d *Driver) stateString() string {
 
 	if d.finishedExport() {
 		s.WriteString("  Export done\n")
+		s.WriteString("    Documents: " + humanize.Comma(int64(d.state.ExportInfo.Documents)))
+		s.WriteString("    Bytes:     " + humanize.Bytes(d.state.ExportInfo.Bytes))
+		s.WriteString("    Files:     " + humanize.Comma(int64(d.state.ExportInfo.Files)))
 		s.WriteString("\n")
 		s.WriteString("### Creating Rockset collection ")
 		s.WriteString(d.config.RocksetCollection)

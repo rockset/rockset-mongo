@@ -19,6 +19,10 @@ type ExportInfo struct {
 	StartTime time.Time `json:"start_time"`
 	EndTime   time.Time `json:"stop_time"`
 
+	Documents uint64 `json:"documents"`
+	Bytes     uint64 `json:"bytes"`
+	Files     uint64 `json:"files"`
+
 	Bucket string `json:"s3_bucket"`
 	Prefix string `json:"s3_prefix"`
 }
