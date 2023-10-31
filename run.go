@@ -248,7 +248,7 @@ func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
 		}
 
 		collState, _ := d.creator.CollectionState(coll)
-		log.Logvf(d.logLevel, "collection state: %v", collState)
+		log.Logvf(d.logLevel, "collection state: %v %v", collState, d.collectionProgress(coll))
 
 		if collState >= rockcollection.INITIAL_LOAD_DONE {
 			return nil
@@ -262,6 +262,24 @@ func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
 	return fmt.Errorf("timed out before collection is ready: %w", ctx.Err())
 }
 
+func (d *Driver) collectionProgress(coll *openapi.Collection) string {
+	var s3 *openapi.Source
+	for _, cs := range coll.Sources {
+		if cs.S3 != nil {
+			s3 = &cs
+		}
+	}
+
+	if s3 == nil || s3.S3.ObjectCountDownloaded == nil || s3.S3.ObjectCountTotal == nil {
+		return ""
+	}
+	downloaded := *s3.S3.ObjectCountDownloaded
+	total := *s3.S3.ObjectCountTotal
+
+	return fmt.Sprintf("  %v / %v  (%0.2f%%)",
+		humanize.Comma(downloaded), humanize.Comma(total), 1.0*float64(downloaded)/float64(total))
+}
+
 func (d *Driver) waitUntilReady(ctx context.Context) error {
 	for ctx.Err() == nil {
 		coll, err := d.getCollection(ctx)
@@ -273,7 +291,7 @@ func (d *Driver) waitUntilReady(ctx context.Context) error {
 			status = strings.ToUpper(*coll.Status)
 
 		}
-		log.Logvf(d.logLevel, "collection state: %v", status)
+		log.Logvf(d.logLevel, "collection state: %v %v", status, d.collectionProgress(coll))
 
 		if status == "READY" {
 			return nil
@@ -362,7 +380,7 @@ func (d *Driver) run(ctx context.Context) error {
 	}
 
 	collState, _ := d.creator.CollectionState(coll)
-	log.Logvf(d.logLevel, "collection state: %v", collState)
+	log.Logvf(d.logLevel, "collection state: %v %v", collState, d.collectionProgress(coll))
 	if collState <= rockcollection.DOESNOT_EXIST {
 		if err := d.createCollection(ctx); err != nil {
 			return fmt.Errorf("failed to create collection: %w", err)

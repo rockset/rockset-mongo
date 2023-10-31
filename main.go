@@ -83,7 +83,7 @@ func run(args []string) {
 	}
 
 	var p *tea.Program
-	if true {
+	if false {
 		d.tui = true
 		d.logLevel = log.DebugLow
 
