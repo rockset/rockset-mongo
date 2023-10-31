@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,6 +14,7 @@ import (
 	"github.com/rockset/rockset-mongo/pkg/config"
 	"github.com/rockset/rockset-mongo/pkg/mongo"
 	"github.com/rockset/rockset-mongo/pkg/writers"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -87,26 +87,25 @@ func run(args []string) {
 		d.tui = true
 		d.logLevel = log.DebugLow
 
-		p = tea.NewProgram(&model{d})
+		p = tea.NewProgram(&model{d}, tea.WithContext(ctx))
 	}
 
-	var done sync.WaitGroup
-	done.Add(1)
-	go func() {
-		defer done.Done()
-		if err := d.run(ctx); err != nil {
-			log.Logvf(log.Always, "error: %v", err)
-			os.Exit(util.ExitFailure)
-		}
+	var errGrp errgroup.Group
+	errGrp.Go(func() error {
+		err := d.run(ctx)
 		p.Quit()
-	}()
+		return err
+	})
 
 	if _, err := p.Run(); err != nil {
 		log.Logvf(log.Always, "error: %v", err)
 		os.Exit(util.ExitFailure)
 	}
 	cancelFn()
-	done.Wait()
+	if err := errGrp.Wait(); err != nil {
+		log.Logvf(log.Always, "error: %v", err)
+		os.Exit(util.ExitFailure)
+	}
 	fmt.Println("Collection created and import is done")
 }
 

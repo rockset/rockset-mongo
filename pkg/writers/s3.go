@@ -135,5 +135,5 @@ func (w *S3Writer) uploadFile(f *os.File) error {
 }
 
 func (w *S3Writer) Stats() Stats {
-	return w.fs.stats
+	return w.fs.Stats()
 }

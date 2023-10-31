@@ -35,9 +35,31 @@ type Driver struct {
 	collection   *openapi.Collection
 	exportWriter writers.OutputWriter
 
-	tui      bool
-	logLevel int
+	tui           bool
+	logLevel      int
+	exportCounter progressUpdatable
 }
+
+type progressUpdatable struct {
+	current int64
+	max     int64
+}
+
+func (u *progressUpdatable) Inc(amount int64) {
+	atomic.AddInt64(&u.current, amount)
+}
+
+func (u *progressUpdatable) Progress() (current int64, max int64) {
+	current = atomic.LoadInt64(&u.current)
+	max = atomic.LoadInt64(&u.max)
+	return
+}
+
+func (u *progressUpdatable) Set(amount int64) {
+	atomic.StoreInt64(&u.current, amount)
+}
+
+var _ progress.Updateable = (*progressUpdatable)(nil)
 
 func (d *Driver) preflight(ctx context.Context) error {
 	if d.config.RocksetCollection == "" {
@@ -121,6 +143,9 @@ func (d *Driver) finishedExport() bool {
 }
 
 func (d *Driver) progressor(totalDocuments uint64, dbNamespace string) (progress.Updateable, func()) {
+	if d.tui {
+		return &d.exportCounter, func() {}
+	}
 	progressManager := progress.NewBarWriter(log.Writer(0), progressBarWaitTime, progressBarLength, false)
 	progressManager.Start()
 
@@ -373,7 +398,7 @@ func (d *Driver) stateString() string {
 		s.WriteString(fmt.Sprintf(" Docs: %v    Size: %v\n", humanize.Comma(int64(d.state.MongoDBCollectionInfo.Documents)),
 			humanize.Bytes(d.state.MongoDBCollectionInfo.Size)))
 	}
-	if !d.finishedExport() && d.exportWriter != nil {
+	if !d.finishedExport() && d.exportWriter != nil && d.state != nil && d.state.MongoDBCollectionInfo != nil {
 		stats := d.exportWriter.Stats()
 		docs := atomic.LoadUint64(&stats.Docs)
 		perc := float64(atomic.LoadUint64(&stats.Docs)) / float64(d.state.MongoDBCollectionInfo.Documents)
@@ -386,6 +411,7 @@ func (d *Driver) stateString() string {
 	}
 
 	if d.finishedExport() {
+		s.WriteString("\n")
 		s.WriteString("  Export done\n")
 		s.WriteString("    Documents: " + humanize.Comma(int64(d.state.ExportInfo.Documents)))
 		s.WriteString("    Bytes:     " + humanize.Bytes(d.state.ExportInfo.Bytes))
@@ -399,7 +425,7 @@ func (d *Driver) stateString() string {
 		if coll == nil {
 			s.WriteString(" Creating collection")
 		} else {
-			s.WriteString(" Status: " + *coll.Status)
+			s.WriteString(" Status: " + *coll.Status + "\n")
 
 			var s3 *openapi.Source
 			for _, cs := range coll.Sources {
