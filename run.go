@@ -129,8 +129,8 @@ func (d *Driver) checkS3Access(ctx context.Context) error {
 }
 
 func (d *Driver) checkRocksetCollection(ctx context.Context) error {
-	_, err := d.getCollection(ctx)
-	if err == nil && !d.finishedExport() {
+	coll, err := d.getCollection(ctx)
+	if coll != nil && !d.finishedExport() {
 		return fmt.Errorf("collection %v exists but export is incomplete. Set a new collection", d.config.RocksetCollection)
 	} else if err != nil && !strings.Contains(err.Error(), "does not exist in") {
 		return fmt.Errorf("failed to query Rockset: %w", err)
