@@ -93,15 +93,19 @@ func run(args []string) {
 	var errGrp errgroup.Group
 	errGrp.Go(func() error {
 		err := d.run(ctx)
-		p.Quit()
+		if p != nil {
+			p.Quit()
+		}
 		return err
 	})
 
-	if _, err := p.Run(); err != nil {
-		log.Logvf(log.Always, "error: %v", err)
-		os.Exit(util.ExitFailure)
+	if p != nil {
+		if _, err := p.Run(); err != nil {
+			log.Logvf(log.Always, "error: %v", err)
+			os.Exit(util.ExitFailure)
+		}
+		cancelFn()
 	}
-	cancelFn()
 	if err := errGrp.Wait(); err != nil {
 		log.Logvf(log.Always, "error: %v", err)
 		os.Exit(util.ExitFailure)

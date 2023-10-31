@@ -129,7 +129,7 @@ func (d *Driver) checkS3Access(ctx context.Context) error {
 }
 
 func (d *Driver) checkRocksetAccess(ctx context.Context) error {
-	_, err := d.creator.GetCollection(ctx)
+	_, err := d.getCollection(ctx)
 	if err != nil && !strings.Contains(err.Error(), "does not exist in") {
 		return fmt.Errorf("failed to query Rockset: %w", err)
 	}
@@ -183,6 +183,7 @@ func (d *Driver) export(ctx context.Context) error {
 		Out:             s3Uri,
 		TargetChunkSize: d.config.Mongo.TargetChunkSizeMB * 1024 * 1024,
 		FilePrefix:      d.config.Mongo.DB + "." + d.config.Mongo.Collection,
+		ExportID:        d.state.ID.String(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create writer: %w", err)
@@ -239,12 +240,12 @@ func (d *Driver) createCollection(ctx context.Context) error {
 
 func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
 	for ctx.Err() == nil {
-		coll, err := d.creator.GetCollection(ctx)
+		coll, err := d.getCollection(ctx)
 		if err != nil && !strings.Contains(err.Error(), "does not exist in") {
 			return fmt.Errorf("failed to get collection info: %w", err)
 		}
 
-		collState, _ := d.creator.CollectionState(&coll)
+		collState, _ := d.creator.CollectionState(coll)
 		log.Logvf(d.logLevel, "collection state: %v", collState)
 
 		if collState >= rockcollection.INITIAL_LOAD_DONE {
@@ -261,7 +262,7 @@ func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
 
 func (d *Driver) waitUntilReady(ctx context.Context) error {
 	for ctx.Err() == nil {
-		coll, err := d.creator.GetCollection(ctx)
+		coll, err := d.getCollection(ctx)
 		if err != nil && !strings.Contains(err.Error(), "does not exist in") {
 			return fmt.Errorf("failed to get collection info: %w", err)
 		}
@@ -290,7 +291,7 @@ func (d *Driver) createMongoDbSource(ctx context.Context) error {
 }
 
 func (d *Driver) deleteS3Source(ctx context.Context) error {
-	coll, err := d.creator.GetCollection(ctx)
+	coll, err := d.getCollection(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get collection info: %w", err)
 	}
@@ -416,7 +417,7 @@ func (d *Driver) stateString() string {
 		s.WriteString("    Documents: " + humanize.Comma(int64(d.state.ExportInfo.Documents)))
 		s.WriteString("    Bytes:     " + humanize.Bytes(d.state.ExportInfo.Bytes))
 		s.WriteString("    Files:     " + humanize.Comma(int64(d.state.ExportInfo.Files)))
-		s.WriteString("\n")
+		s.WriteString("\n\n\n")
 		s.WriteString("### Creating Rockset collection ")
 		s.WriteString(d.config.RocksetCollection)
 		s.WriteString("\n")
@@ -434,7 +435,7 @@ func (d *Driver) stateString() string {
 				}
 			}
 
-			if s3 != nil && s3.S3.ObjectCountDownloaded != nil && s3.S3.ObjectCountTotal != nil {
+			if s3 != nil && s3.S3 != nil && s3.S3.ObjectCountDownloaded != nil && s3.S3.ObjectCountTotal != nil && *s3.S3.ObjectCountTotal > 0 {
 				downloaded := *s3.S3.ObjectCountDownloaded
 				total := *s3.S3.ObjectCountTotal
 
