@@ -111,6 +111,9 @@ func (rc *CollectionCreator) CollectionState(coll *openapi.Collection) (Collecti
 		}
 		return INITIAL_LOAD_IN_PROGRESS, nil
 	}
+	if rc.conf.LoadOnly {
+		return STREAMING, nil
+	}
 
 	return DOESNOT_EXIST, fmt.Errorf("unexpected state; no S3 or Mongo sources: %+v", coll.Sources)
 }

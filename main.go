@@ -42,7 +42,7 @@ func run(args []string) {
 	finishedChan := signals.HandleWithInterrupt(cancelFn)
 	defer close(finishedChan)
 
-	opts, err := ParseOptions(args, VersionStr, GitCommit)
+	opts, err := ParseRunOptions(args, VersionStr, GitCommit)
 	if err != nil {
 		log.Logvf(log.Always, "error parsing command line options: %s", err.Error())
 		log.Logvf(log.Always, util.ShortUsage("mongodump"))
@@ -64,6 +64,9 @@ func run(args []string) {
 	if err != nil {
 		log.Logvf(log.Always, "error parsing config file: %v", err)
 		os.Exit(util.ExitFailure)
+	}
+	if opts.LoadOnly {
+		conf.LoadOnly = opts.LoadOnly
 	}
 
 	state, err := config.ReadState("state.json")
@@ -119,7 +122,7 @@ func export(args []string) {
 	finishedChan := signals.HandleWithInterrupt(cancelFn)
 	defer close(finishedChan)
 
-	opts, err := ParseOptions(args, VersionStr, GitCommit)
+	opts, err := ParseExportOptions(args, VersionStr, GitCommit)
 	if err != nil {
 		log.Logvf(log.Always, "error parsing command line options: %s", err.Error())
 		log.Logvf(log.Always, util.ShortUsage("rockset-mongo export"))

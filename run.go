@@ -311,6 +311,10 @@ func (d *Driver) waitUntilReady(ctx context.Context) error {
 }
 
 func (d *Driver) createMongoDbSource(ctx context.Context) error {
+	if d.config.LoadOnly {
+		return nil
+	}
+
 	_, err := d.creator.AddMongoSource(ctx, d.state.MongoDBCollectionInfo.ResumeToken)
 	return err
 }

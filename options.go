@@ -68,8 +68,8 @@ type Options struct {
 	*OutputOptions
 }
 
-func ParseOptions(rawArgs []string, versionStr, gitCommit string) (Options, error) {
-	opts := options.New("rockset-mongodump", versionStr, gitCommit, Usage, true, options.EnabledOptions{Auth: true, Connection: true, Namespace: true, URI: true})
+func ParseExportOptions(rawArgs []string, versionStr, gitCommit string) (Options, error) {
+	opts := options.New("rockset-mongo", versionStr, gitCommit, Usage, true, options.EnabledOptions{Auth: true, Connection: true, Namespace: true, URI: true})
 
 	inputOpts := &InputOptions{}
 	opts.AddOptions(inputOpts)
@@ -145,4 +145,68 @@ func ParseConfigFile(opts *options.ToolOptions, args []string) error {
 	//}
 
 	return nil
+}
+
+var RunUsage = `<options>
+
+Creates a Rockset collection that tails the specified Mongo collection.
+
+Must specify a config file, with the following structure:
+
+"""
+rockset_collection: commons.mongotest13           # collection name
+
+rockset:
+  api_key: Mea..                                  # Rockset API key to use to create collection
+  api_server: https://api.usw2a1.dev.rockset.com/ # api server to use
+
+mongo:
+  uri: mongodb+srv://username:password@foobar.14l6aa6.mongodb.net/ # URI for MongoDB collection
+  db: sample_training               # MongoDB Database
+  collection: companies				# MongoDB collection
+  integration: prod-mongo           # Rockset integration configured with MongoDB credentials
+
+s3:
+  uri: s3://export-bucket/prefix    # S3 URI where MongodB collection will be exported to
+  integration: s3-runbook-example   # Rockset integration with read access to the S3 path
+
+create_collection_request:
+  # create request specification, containing retention/transformation info
+  field_mapping_query:
+    sql: |
+      SELECT *
+      EXCEPT (_meta)
+      FROM _input
+  storage_compression_type: LZ4
+  """`
+
+type LoadOptions struct {
+	LoadOnly bool `long:"load-only" description:"Perform a one-time data load into Rockset (default: false)"`
+}
+
+func (*LoadOptions) Name() string {
+	return "load"
+}
+
+type RunOptions struct {
+	*options.ToolOptions
+	*LoadOptions
+}
+
+func ParseRunOptions(rawArgs []string, versionStr, gitCommit string) (RunOptions, error) {
+	opts := options.New("rockset-mongo", versionStr, gitCommit, Usage, true, options.EnabledOptions{Auth: true, Connection: true, Namespace: true, URI: true})
+
+	inputOpts := &LoadOptions{}
+	opts.AddOptions(inputOpts)
+
+	extraArgs, err := ParseArgs(opts, rawArgs)
+	if err != nil {
+		return RunOptions{}, err
+	}
+
+	if len(extraArgs) != 0 {
+		return RunOptions{}, fmt.Errorf("error no positional arguments expected")
+	}
+
+	return RunOptions{opts, inputOpts}, nil
 }

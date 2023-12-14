@@ -35,6 +35,7 @@ type Config struct {
 
 	RocksetCollection       string                 `yaml:"rockset_collection"`
 	CreateCollectionRequest map[string]interface{} `yaml:"create_collection_request"`
+	LoadOnly                bool                   `yaml:"load_only"`
 }
 
 func ReadConfig(path string) (*Config, error) {
