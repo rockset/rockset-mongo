@@ -263,6 +263,10 @@ func (d *Driver) waitUntilInitialLoadDone(ctx context.Context) error {
 }
 
 func (d *Driver) collectionProgress(coll *openapi.Collection) string {
+	if coll == nil {
+		return ""
+	}
+
 	var s3 *openapi.Source
 	for _, cs := range coll.Sources {
 		if cs.S3 != nil {
@@ -270,14 +274,15 @@ func (d *Driver) collectionProgress(coll *openapi.Collection) string {
 		}
 	}
 
-	if s3 == nil || s3.S3.ObjectCountDownloaded == nil || s3.S3.ObjectCountTotal == nil {
+	if s3 == nil || s3.S3 == nil || s3.S3.ObjectCountDownloaded == nil || s3.S3.ObjectCountTotal == nil ||
+		*s3.S3.ObjectCountTotal == 0 {
 		return ""
 	}
 	downloaded := *s3.S3.ObjectCountDownloaded
 	total := *s3.S3.ObjectCountTotal
 
 	return fmt.Sprintf("  %v / %v  (%0.2f%%)",
-		humanize.Comma(downloaded), humanize.Comma(total), 1.0*float64(downloaded)/float64(total))
+		humanize.Comma(downloaded), humanize.Comma(total), 100.0*float64(downloaded)/float64(total))
 }
 
 func (d *Driver) waitUntilReady(ctx context.Context) error {
