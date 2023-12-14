@@ -296,9 +296,13 @@ func (d *Driver) waitUntilReady(ctx context.Context) error {
 		status := ""
 		if coll.Status != nil {
 			status = strings.ToUpper(*coll.Status)
-
 		}
-		log.Logvf(d.logLevel, "collection state: %v %v", status, d.collectionProgress(coll))
+		progress := d.collectionProgress(coll)
+		if status == "BULK_INGEST_MODE" {
+			// TODO show bulk ingest progress
+			progress = ""
+		}
+		log.Logvf(d.logLevel, "collection state: %v %v", status, progress)
 
 		if status == "READY" {
 			return nil
