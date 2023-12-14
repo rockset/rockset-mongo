@@ -3,6 +3,7 @@ package rockcollection
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/mongodb/mongo-tools/common/log"
@@ -161,9 +162,10 @@ func (rc *CollectionCreator) CreateInitialCollection(ctx context.Context, export
 	}
 
 	var resp openapi.Collection
-	_, err = rc.raw.Execute(req, &resp)
+	httpResp, err := rc.raw.Execute(req, &resp)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		respBody, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("request failed: %w:\n%v", err, string(respBody))
 	}
 
 	return &resp, nil
