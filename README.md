@@ -31,7 +31,7 @@ rockset_collection: commons.mongotest13           # Rockset collection name
 
 rockset:
   api_key: Mea..                                  # Rockset API key to use to create collection
-  api_server: https://api.usw2a1.dev.rockset.com/ # api server to use.
+  api_server: https://api.usw2a1.rockset.com/     # api server to use.
 
 mongo:
   uri: mongodb+srv://username:password@foobar.14l6aa6.mongodb.net/ # URI for MongoDB collection
