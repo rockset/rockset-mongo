@@ -202,6 +202,8 @@ func (d *Driver) export(ctx context.Context) error {
 	progressor, progressCleanup := d.progressor(info.Documents, dbNamespace)
 	defer progressCleanup()
 
+	d.persistState()
+
 	log.Logvf(d.logLevel, "Started export to %v", s3Uri)
 	if err = dump.Dump(ctx, d.exportWriter, progressor); err != nil {
 		return fmt.Errorf("failed to export data: %w", err)
