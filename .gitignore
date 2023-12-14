@@ -2,3 +2,4 @@
 rockset-mongo
 dump
 state.json
+bin/
