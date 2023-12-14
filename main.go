@@ -122,7 +122,7 @@ func export(args []string) {
 	opts, err := ParseOptions(args, VersionStr, GitCommit)
 	if err != nil {
 		log.Logvf(log.Always, "error parsing command line options: %s", err.Error())
-		log.Logvf(log.Always, util.ShortUsage("mongodump"))
+		log.Logvf(log.Always, util.ShortUsage("rockset-mongo export"))
 		os.Exit(util.ExitFailure)
 	}
 
@@ -153,7 +153,7 @@ func export(args []string) {
 
 	out, err := writers.NewWriter(ctx, &writers.WriterOptions{
 		Out:             opts.Out,
-		TargetChunkSize: uint64(opts.TargetSize),
+		TargetChunkSize: uint64(opts.TargetSize) * 1024 * 1024,
 		FilePrefix:      opts.ToolOptions.DB + "." + opts.ToolOptions.Collection,
 	})
 	if err != nil {
@@ -180,9 +180,10 @@ func export(args []string) {
 	}
 
 	dump.CollectionInfo(ctx)
-	log.Logvf(log.Always, "exporting")
+	log.Logvf(log.Always, "exporting MongoDB collection %v.%v", opts.ToolOptions.DB, opts.ToolOptions.Collection)
 	if err = dump.Dump(ctx, out, dumpProgressor); err != nil {
 		log.Logvf(log.Always, "Failed: %v", err)
 		os.Exit(util.ExitFailure)
 	}
+	log.Logvf(log.Always, "export done")
 }

@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var Usage = `<options> <connection-string>
+var Usage = `<options>
 
 Export the content of a Mongo collection into .bson files.
 
@@ -52,9 +52,9 @@ func (inputOptions *InputOptions) GetQuery() ([]byte, error) {
 
 // OutputOptions defines the set of options for writing dump data.
 type OutputOptions struct {
-	Out        string `long:"out" default:"dump" value-name:"<directory-path>" short:"o" description:"output directory, or '-' for stdout (default: 'dump')"`
-	Gzip       bool   `long:"gzip" description:"compress collection output with Gzip"`
-	TargetSize uint32 `long:"target_size" default:"100" description:"target file size in MiB"`
+	Out string `long:"out" default:"dump" value-name:"<directory-path>" short:"o" description:"output directory, or '-' for stdout (default: 'dump')"`
+	//Gzip       bool   `long:"gzip" description:"compress collection output with Gzip"`
+	TargetSize uint32 `long:"target_size" default:"250" description:"target file size in MiB"`
 }
 
 // Name returns a human-readable group name for output options.
@@ -81,11 +81,8 @@ func ParseOptions(rawArgs []string, versionStr, gitCommit string) (Options, erro
 		return Options{}, err
 	}
 
-	if len(extraArgs) > 0 {
-		return Options{}, fmt.Errorf("error parsing positional arguments: " +
-			"provide only one MongoDB connection string. " +
-			"Connection strings must begin with mongodb:// or mongodb+srv:// schemes",
-		)
+	if len(extraArgs) != 0 {
+		return Options{}, fmt.Errorf("error no positional arguments expected")
 	}
 
 	return Options{opts, inputOpts, outputOpts}, nil
