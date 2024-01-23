@@ -62,8 +62,8 @@ func (u *progressUpdatable) Set(amount int64) {
 var _ progress.Updateable = (*progressUpdatable)(nil)
 
 func (d *Driver) preflight(ctx context.Context) error {
-	if d.config.RocksetCollection == "" {
-		return fmt.Errorf("missing rockset `collection`")
+	if err := d.config.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
 	}
 
 	// check permissions to S3
