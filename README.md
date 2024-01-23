@@ -8,7 +8,9 @@ Helper tool for onboarding very large MongoDB collections into Rockset, targetin
 
 This tool accelerates initial load by exporting MongoDB data directly to S3, then Rockset would ingest the exported files in parallel.
 
-You will need to set up an S3 integration along with IAM Role/Policy to allow Rockset access. You can follow the [Create an S3 integration](https://docs.rockset.com/documentation/docs/amazon-s3#create-an-s3-integration) guide for that. Make sure to also add write permissions so that the tool can write the exported files to the S3 bucket. Here is a sample policy:
+You will need to set up an S3 integration along with IAM Role/Policy to allow Rockset access. You can follow the [Create an S3 integration](https://docs.rockset.com/documentation/docs/amazon-s3#create-an-s3-integration) guide for that.
+
+Additionally, the tool requires IAM Role/User with write permissions to the bucket. The tool will use credentials found in host environment, following [the AWS CLI behavior](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) (e.g. Environment variables, `~/.aws/credentials`, EC2 instance profile, etc), and will require a policy, like:
 
 ```
 {
@@ -22,28 +24,6 @@ You will need to set up an S3 integration along with IAM Role/Policy to allow Ro
         "s3:PutObject"
       ],
       "Resource": "arn:aws:s3:::<bucket>/*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:List*"
-      ],
-      "Resource": "arn:aws:s3:::<bucket>",
-      "Condition": {
-        "StringLike": {
-          "s3:prefix": [
-            "*"
-          ]
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:ListBucket",
-        "s3:GetBucketLocation"
-      ],
-      "Resource": "arn:aws:s3:::<bucket>"
     }
   ]
 }
