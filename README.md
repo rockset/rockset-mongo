@@ -1,6 +1,6 @@
 # Rockset-mongo
 
-Helper tool for onboarding very large MongoDB collections into Rockset, targeting collections exceeding 200GiB. It uses Rockset's highly scalable S3 connector to accelerate the initial load, then sets up Rockset to stream data continuously from Rockset directly.
+Helper tool for onboarding very large MongoDB collections into Rockset, targeting collections exceeding 200GiB. It uses Rockset's highly scalable S3 connector to accelerate the initial load, then sets up Rockset to stream data continuously from MongoDB directly.
 
 ## How to run
 
