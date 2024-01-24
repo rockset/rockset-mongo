@@ -38,6 +38,44 @@ type Config struct {
 	LoadOnly                bool                   `yaml:"load_only"`
 }
 
+func (c *Config) Validate() error {
+	if c.RocksetCollection == "" {
+		return fmt.Errorf("missing rockset `collection`")
+	}
+
+	// rockset fields
+	if c.Rockset.ApiKey == "" {
+		return fmt.Errorf("missing rockset.api_key")
+	}
+	if c.Rockset.ApiServer == "" {
+		return fmt.Errorf("missing rockset.api_server")
+	}
+
+	// S3 fields
+	if c.S3.Uri == "" {
+		return fmt.Errorf("missing s3.uri")
+	}
+	if c.S3.Integration == "" {
+		return fmt.Errorf("missing s3.integration")
+	}
+
+	// Mongo
+	if c.Mongo.Uri == "" {
+		return fmt.Errorf("missing mongo.uri")
+	}
+	if !c.LoadOnly && c.Mongo.Integration == "" {
+		return fmt.Errorf("missing mongo.integration")
+	}
+	if c.Mongo.DB == "" {
+		return fmt.Errorf("missing mongo.db")
+	}
+	if c.Mongo.Collection == "" {
+		return fmt.Errorf("missing mongo.collection")
+	}
+
+	return nil
+}
+
 func ReadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
